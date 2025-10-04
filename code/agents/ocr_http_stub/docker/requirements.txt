@@ -1,0 +1,12 @@
+# Python dependencies for GOX OCR Service
+flask==2.3.3
+flask-cors==4.0.0
+pillow==10.0.1
+pytesseract==0.3.10
+wand==0.6.13
+pdf2image==1.16.3
+opencv-python-headless==4.8.1.78
+numpy==1.24.4
+werkzeug==2.3.7
+gunicorn==21.2.0
+requests==2.31.0

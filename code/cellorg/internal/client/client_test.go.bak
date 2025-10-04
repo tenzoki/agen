@@ -1,0 +1,374 @@
+package client
+
+import (
+	"encoding/json"
+	"testing"
+	"time"
+)
+
+func TestBrokerMessageCreation(t *testing.T) {
+	msg := &BrokerMessage{
+		ID:     "test-msg-001",
+		Type:   "test_operation",
+		Target: "test-agent",
+		Payload: map[string]interface{}{
+			"operation": "test",
+			"data":      "test data",
+		},
+		Meta: map[string]interface{}{
+			"timestamp": time.Now().Format(time.RFC3339),
+			"source":    "test-client",
+		},
+	}
+
+	if msg.ID != "test-msg-001" {
+		t.Errorf("Expected ID 'test-msg-001', got '%s'", msg.ID)
+	}
+	if msg.Type != "test_operation" {
+		t.Errorf("Expected Type 'test_operation', got '%s'", msg.Type)
+	}
+	if msg.Target != "test-agent" {
+		t.Errorf("Expected Target 'test-agent', got '%s'", msg.Target)
+	}
+
+	payload, ok := msg.Payload.(map[string]interface{})
+	if !ok {
+		t.Fatal("Expected payload to be map[string]interface{}")
+	}
+	if payload["operation"] != "test" {
+		t.Errorf("Expected operation 'test', got '%v'", payload["operation"])
+	}
+}
+
+func TestBrokerMessageSerialization(t *testing.T) {
+	originalMsg := &BrokerMessage{
+		ID:     "serialize-test-001",
+		Type:   "serialization_test",
+		Target: "test-target",
+		Payload: map[string]interface{}{
+			"string_field": "test string",
+			"number_field": 42,
+			"bool_field":   true,
+			"nested_field": map[string]interface{}{
+				"nested_string": "nested value",
+				"nested_number": 123,
+			},
+		},
+		Meta: map[string]interface{}{
+			"created_at": "2024-09-27T10:00:00Z",
+			"version":    1,
+		},
+	}
+
+	// Test JSON serialization using standard json package
+	serialized, err := json.Marshal(originalMsg)
+	if err != nil {
+		t.Fatalf("Failed to serialize message: %v", err)
+	}
+
+	// Test JSON deserialization using standard json package
+	deserializedMsg := &BrokerMessage{}
+	err = json.Unmarshal(serialized, deserializedMsg)
+	if err != nil {
+		t.Fatalf("Failed to deserialize message: %v", err)
+	}
+
+	// Verify fields match
+	if deserializedMsg.ID != originalMsg.ID {
+		t.Errorf("ID mismatch: expected '%s', got '%s'", originalMsg.ID, deserializedMsg.ID)
+	}
+	if deserializedMsg.Type != originalMsg.Type {
+		t.Errorf("Type mismatch: expected '%s', got '%s'", originalMsg.Type, deserializedMsg.Type)
+	}
+	if deserializedMsg.Target != originalMsg.Target {
+		t.Errorf("Target mismatch: expected '%s', got '%s'", originalMsg.Target, deserializedMsg.Target)
+	}
+}
+
+func TestBrokerClientConfiguration(t *testing.T) {
+	// Test configuration structure for broker client
+	address := "localhost:8080"
+	agentID := "test-client-001"
+	debug := true
+
+	if address != "localhost:8080" {
+		t.Errorf("Expected broker address 'localhost:8080', got '%s'", address)
+	}
+	if agentID != "test-client-001" {
+		t.Errorf("Expected agent ID 'test-client-001', got '%s'", agentID)
+	}
+	if !debug {
+		t.Error("Expected debug to be enabled")
+	}
+
+	// Test timeout and retry settings
+	reconnectDelay := 5 * time.Second
+	maxRetries := 3
+
+	if reconnectDelay != 5*time.Second {
+		t.Errorf("Expected reconnect delay 5s, got %v", reconnectDelay)
+	}
+	if maxRetries != 3 {
+		t.Errorf("Expected max retries 3, got %d", maxRetries)
+	}
+}
+
+func TestBrokerClientCreation(t *testing.T) {
+	address := "localhost:8080"
+	agentID := "test-client-001"
+	debug := true
+
+	client := NewBrokerClient(address, agentID, debug)
+	if client == nil {
+		t.Fatal("Expected broker client to be created")
+	}
+
+	// Since the fields are private, we test by checking the constructor worked
+	// In a real scenario, we might have public getter methods
+	if client == nil {
+		t.Error("Expected client to be initialized")
+	}
+}
+
+func TestMessageHandlerRegistration(t *testing.T) {
+
+	handlerCalled := false
+	handler := func(msg *BrokerMessage) error {
+		handlerCalled = true
+		return nil
+	}
+
+	// Test handler function structure
+	testMessage := &BrokerMessage{
+		ID:   "test",
+		Type: "test_message_type",
+	}
+
+	err := handler(testMessage)
+	if err != nil {
+		t.Errorf("Handler should not return error for test message, got: %v", err)
+	}
+
+	if !handlerCalled {
+		t.Error("Expected handler to be called")
+	}
+}
+
+func TestMessageValidation(t *testing.T) {
+	testCases := []struct {
+		name     string
+		message  *BrokerMessage
+		valid    bool
+	}{
+		{
+			name: "valid message",
+			message: &BrokerMessage{
+				ID:      "valid-001",
+				Type:    "test",
+				Target:  "test-agent",
+				Payload: map[string]interface{}{"data": "test"},
+				Meta:    make(map[string]interface{}),
+			},
+			valid: true,
+		},
+		{
+			name: "missing ID",
+			message: &BrokerMessage{
+				Type:    "test",
+				Target:  "test-agent",
+				Payload: map[string]interface{}{"data": "test"},
+				Meta:    make(map[string]interface{}),
+			},
+			valid: false,
+		},
+		{
+			name: "missing type",
+			message: &BrokerMessage{
+				ID:      "missing-type-001",
+				Target:  "test-agent",
+				Payload: map[string]interface{}{"data": "test"},
+				Meta:    make(map[string]interface{}),
+			},
+			valid: false,
+		},
+		{
+			name: "missing target",
+			message: &BrokerMessage{
+				ID:      "missing-target-001",
+				Type:    "test",
+				Payload: map[string]interface{}{"data": "test"},
+				Meta:    make(map[string]interface{}),
+			},
+			valid: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.valid && err != nil {
+				t.Errorf("Expected message to be valid, but got error: %v", err)
+			}
+			if !tc.valid && err == nil {
+				t.Error("Expected message to be invalid, but validation passed")
+			}
+		})
+	}
+}
+
+func TestMessageQueueOperations(t *testing.T) {
+	}
+
+
+	// Test message queuing
+		ID:      "queue-test-001",
+		Type:    "test",
+		Target:  "test-agent",
+		Payload: map[string]interface{}{"sequence": 1},
+		Meta:    make(map[string]interface{}),
+	}
+
+	msg2 := &BrokerMessage{
+		ID:      "queue-test-002",
+		Type:    "test",
+		Target:  "test-agent",
+		Payload: map[string]interface{}{"sequence": 2},
+		Meta:    make(map[string]interface{}),
+	}
+
+	// Enqueue messages
+	if err != nil {
+		t.Fatalf("Failed to enqueue message 1: %v", err)
+	}
+
+	if err != nil {
+		t.Fatalf("Failed to enqueue message 2: %v", err)
+	}
+
+	// Check queue length
+	}
+
+	// Dequeue messages
+	if err != nil {
+		t.Fatalf("Failed to dequeue message 1: %v", err)
+	}
+
+	if dequeuedMsg1.ID != "queue-test-001" {
+		t.Errorf("Expected first message ID 'queue-test-001', got '%s'", dequeuedMsg1.ID)
+	}
+
+	if err != nil {
+		t.Fatalf("Failed to dequeue message 2: %v", err)
+	}
+
+	if dequeuedMsg2.ID != "queue-test-002" {
+		t.Errorf("Expected second message ID 'queue-test-002', got '%s'", dequeuedMsg2.ID)
+	}
+
+	// Check queue is empty
+	if client.GetQueueLength() != 0 {
+		t.Errorf("Expected queue to be empty, got length %d", client.GetQueueLength())
+	}
+}
+
+func TestConnectionStatusTracking(t *testing.T) {
+	config := &BrokerClientConfig{
+		BrokerAddress: "localhost:8080",
+		ClientID:      "test-client-001",
+		BufferSize:    100,
+	}
+
+	client := NewBrokerClient(config)
+
+	// Initial state should be disconnected
+	if client.IsConnected() {
+		t.Error("Expected client to be initially disconnected")
+	}
+
+	// Test connection status methods
+	client.setConnected(true)
+	if !client.IsConnected() {
+		t.Error("Expected client to be connected after setConnected(true)")
+	}
+
+	client.setConnected(false)
+	if client.IsConnected() {
+		t.Error("Expected client to be disconnected after setConnected(false)")
+	}
+}
+
+func TestClientMetrics(t *testing.T) {
+	config := &BrokerClientConfig{
+		BrokerAddress: "localhost:8080",
+		ClientID:      "test-client-001",
+		BufferSize:    100,
+	}
+
+	client := NewBrokerClient(config)
+
+	// Test metrics initialization
+	metrics := client.GetMetrics()
+	if metrics == nil {
+		t.Fatal("Expected metrics to be available")
+	}
+
+	// Test incrementing counters
+	client.incrementMessagesSent()
+	client.incrementMessagesSent()
+	client.incrementMessagesReceived()
+	client.incrementErrors()
+
+	updatedMetrics := client.GetMetrics()
+	if updatedMetrics["messages_sent"] != 2 {
+		t.Errorf("Expected 2 messages sent, got %v", updatedMetrics["messages_sent"])
+	}
+	if updatedMetrics["messages_received"] != 1 {
+		t.Errorf("Expected 1 message received, got %v", updatedMetrics["messages_received"])
+	}
+	if updatedMetrics["errors"] != 1 {
+		t.Errorf("Expected 1 error, got %v", updatedMetrics["errors"])
+	}
+}
+
+func TestRequestResponseCorrelation(t *testing.T) {
+	config := &BrokerClientConfig{
+		BrokerAddress:  "localhost:8080",
+		ClientID:       "test-client-001",
+		RequestTimeout: 5 * time.Second,
+		BufferSize:     100,
+	}
+
+	client := NewBrokerClient(config)
+
+	// Test creating a request with correlation ID
+	requestMsg := &BrokerMessage{
+		ID:      "request-001",
+		Type:    "test_request",
+		Target:  "test-agent",
+		Payload: map[string]interface{}{"query": "test"},
+		Meta:    make(map[string]interface{}),
+	}
+
+	correlationID := client.generateCorrelationID(requestMsg)
+	if correlationID == "" {
+		t.Error("Expected correlation ID to be generated")
+	}
+
+	// Test storing pending request
+	client.storePendingRequest(correlationID, requestMsg)
+
+	// Test retrieving pending request
+	retrievedMsg, exists := client.getPendingRequest(correlationID)
+	if !exists {
+		t.Error("Expected pending request to exist")
+	}
+	if retrievedMsg.ID != requestMsg.ID {
+		t.Errorf("Expected retrieved message ID '%s', got '%s'", requestMsg.ID, retrievedMsg.ID)
+	}
+
+	// Test removing pending request
+	client.removePendingRequest(correlationID)
+	_, exists = client.getPendingRequest(correlationID)
+	if exists {
+		t.Error("Expected pending request to be removed")
+	}
+}

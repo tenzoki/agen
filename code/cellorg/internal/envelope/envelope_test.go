@@ -1,0 +1,817 @@
+package envelope
+
+import (
+	"encoding/json"
+	"fmt"
+	"testing"
+	"time"
+
+	"github.com/google/uuid"
+)
+
+func TestNewEnvelope(t *testing.T) {
+	source := "test-agent-001"
+	destination := "pub:test-topic"
+	messageType := "test_message"
+	payload := map[string]interface{}{
+		"data": "test data",
+		"count": 42,
+	}
+
+	envelope, err := NewEnvelope(source, destination, messageType, payload)
+	if err != nil {
+		t.Fatalf("Failed to create envelope: %v", err)
+	}
+
+	if envelope == nil {
+		t.Fatal("Expected envelope to be created")
+	}
+
+	// Verify required fields
+	if envelope.ID == "" {
+		t.Error("Expected envelope ID to be set")
+	}
+
+	if envelope.Source != source {
+		t.Errorf("Expected source %s, got %s", source, envelope.Source)
+	}
+
+	if envelope.Destination != destination {
+		t.Errorf("Expected destination %s, got %s", destination, envelope.Destination)
+	}
+
+	if envelope.MessageType != messageType {
+		t.Errorf("Expected message type %s, got %s", messageType, envelope.MessageType)
+	}
+
+	// Verify timestamp is recent
+	now := time.Now()
+	if envelope.Timestamp.After(now) || envelope.Timestamp.Before(now.Add(-time.Second)) {
+		t.Error("Expected timestamp to be recent")
+	}
+
+	// Verify payload was marshaled correctly
+	if envelope.Payload == nil {
+		t.Fatal("Expected payload to be set")
+	}
+
+	var unmarshalledPayload map[string]interface{}
+	err = json.Unmarshal(envelope.Payload, &unmarshalledPayload)
+	if err != nil {
+		t.Fatalf("Failed to unmarshal payload: %v", err)
+	}
+
+	if unmarshalledPayload["data"] != "test data" {
+		t.Errorf("Expected payload data 'test data', got %v", unmarshalledPayload["data"])
+	}
+
+	if unmarshalledPayload["count"] != float64(42) {
+		t.Errorf("Expected payload count 42, got %v", unmarshalledPayload["count"])
+	}
+
+	// Verify initialized collections
+	if envelope.Headers == nil {
+		t.Error("Expected headers map to be initialized")
+	}
+
+	if envelope.Properties == nil {
+		t.Error("Expected properties map to be initialized")
+	}
+
+	if envelope.Route == nil {
+		t.Error("Expected route slice to be initialized")
+	}
+
+	if len(envelope.Route) != 0 {
+		t.Error("Expected route to be empty initially")
+	}
+}
+
+func TestNewEnvelopeInvalidPayload(t *testing.T) {
+	// Test with payload that can't be marshaled to JSON
+	invalidPayload := make(chan int) // Channels can't be marshaled to JSON
+
+	_, err := NewEnvelope("source", "destination", "type", invalidPayload)
+	if err == nil {
+		t.Fatal("Expected error when creating envelope with invalid payload")
+	}
+}
+
+func TestNewReplyEnvelope(t *testing.T) {
+	// Create original envelope
+	originalPayload := map[string]interface{}{"request": "test"}
+	originalEnvelope, err := NewEnvelope("requester-agent", "pub:request-topic", "request", originalPayload)
+	if err != nil {
+		t.Fatalf("Failed to create original envelope: %v", err)
+	}
+
+	// Set trace ID on original
+	originalEnvelope.TraceID = "trace-123"
+
+	// Create reply envelope
+	replyPayload := map[string]interface{}{"response": "success"}
+	replyEnvelope, err := NewReplyEnvelope(originalEnvelope, "responder-agent", replyPayload)
+	if err != nil {
+		t.Fatalf("Failed to create reply envelope: %v", err)
+	}
+
+	// Verify reply envelope structure
+	if replyEnvelope.Source != "responder-agent" {
+		t.Errorf("Expected reply source 'responder-agent', got %s", replyEnvelope.Source)
+	}
+
+	if replyEnvelope.Destination != originalEnvelope.Source {
+		t.Errorf("Expected reply destination %s, got %s", originalEnvelope.Source, replyEnvelope.Destination)
+	}
+
+	if replyEnvelope.MessageType != "reply" {
+		t.Errorf("Expected reply message type 'reply', got %s", replyEnvelope.MessageType)
+	}
+
+	if replyEnvelope.CorrelationID != originalEnvelope.ID {
+		t.Errorf("Expected correlation ID %s, got %s", originalEnvelope.ID, replyEnvelope.CorrelationID)
+	}
+
+	if replyEnvelope.TraceID != originalEnvelope.TraceID {
+		t.Errorf("Expected trace ID %s, got %s", originalEnvelope.TraceID, replyEnvelope.TraceID)
+	}
+
+	if replyEnvelope.SpanID == "" {
+		t.Error("Expected span ID to be set")
+	}
+
+	if replyEnvelope.SpanID == originalEnvelope.SpanID {
+		t.Error("Expected reply to have different span ID")
+	}
+
+	// Verify payload
+	var unmarshalledPayload map[string]interface{}
+	err = json.Unmarshal(replyEnvelope.Payload, &unmarshalledPayload)
+	if err != nil {
+		t.Fatalf("Failed to unmarshal reply payload: %v", err)
+	}
+
+	if unmarshalledPayload["response"] != "success" {
+		t.Errorf("Expected response 'success', got %v", unmarshalledPayload["response"])
+	}
+}
+
+func TestAddHop(t *testing.T) {
+	envelope, err := NewEnvelope("source", "destination", "type", map[string]interface{}{"test": true})
+	if err != nil {
+		t.Fatalf("Failed to create envelope: %v", err)
+	}
+
+	// Initial state
+	if envelope.HopCount != 0 {
+		t.Errorf("Expected initial hop count 0, got %d", envelope.HopCount)
+	}
+
+	if len(envelope.Route) != 0 {
+		t.Errorf("Expected initial route length 0, got %d", len(envelope.Route))
+	}
+
+	// Add first hop
+	envelope.AddHop("agent-001")
+	if envelope.HopCount != 1 {
+		t.Errorf("Expected hop count 1, got %d", envelope.HopCount)
+	}
+
+	if len(envelope.Route) != 1 {
+		t.Errorf("Expected route length 1, got %d", len(envelope.Route))
+	}
+
+	if envelope.Route[0] != "agent-001" {
+		t.Errorf("Expected route[0] 'agent-001', got %s", envelope.Route[0])
+	}
+
+	// Add second hop
+	envelope.AddHop("agent-002")
+	if envelope.HopCount != 2 {
+		t.Errorf("Expected hop count 2, got %d", envelope.HopCount)
+	}
+
+	if len(envelope.Route) != 2 {
+		t.Errorf("Expected route length 2, got %d", len(envelope.Route))
+	}
+
+	if envelope.Route[1] != "agent-002" {
+		t.Errorf("Expected route[1] 'agent-002', got %s", envelope.Route[1])
+	}
+
+	// Verify route order
+	expectedRoute := []string{"agent-001", "agent-002"}
+	for i, expected := range expectedRoute {
+		if envelope.Route[i] != expected {
+			t.Errorf("Expected route[%d] %s, got %s", i, expected, envelope.Route[i])
+		}
+	}
+}
+
+func TestSetGetHeader(t *testing.T) {
+	envelope, err := NewEnvelope("source", "destination", "type", map[string]interface{}{"test": true})
+	if err != nil {
+		t.Fatalf("Failed to create envelope: %v", err)
+	}
+
+	// Test setting and getting header
+	envelope.SetHeader("content-type", "application/json")
+	envelope.SetHeader("priority", "high")
+
+	value, exists := envelope.GetHeader("content-type")
+	if !exists {
+		t.Fatal("Expected header 'content-type' to exist")
+	}
+
+	if value != "application/json" {
+		t.Errorf("Expected header value 'application/json', got %s", value)
+	}
+
+	value, exists = envelope.GetHeader("priority")
+	if !exists {
+		t.Fatal("Expected header 'priority' to exist")
+	}
+
+	if value != "high" {
+		t.Errorf("Expected header value 'high', got %s", value)
+	}
+
+	// Test non-existent header
+	_, exists = envelope.GetHeader("non-existent")
+	if exists {
+		t.Error("Expected header 'non-existent' not to exist")
+	}
+}
+
+func TestSetGetProperty(t *testing.T) {
+	envelope, err := NewEnvelope("source", "destination", "type", map[string]interface{}{"test": true})
+	if err != nil {
+		t.Fatalf("Failed to create envelope: %v", err)
+	}
+
+	// Test setting and getting properties of different types
+	envelope.SetProperty("string_prop", "test string")
+	envelope.SetProperty("int_prop", 42)
+	envelope.SetProperty("bool_prop", true)
+	envelope.SetProperty("map_prop", map[string]interface{}{"nested": "value"})
+
+	// Test string property
+	value, exists := envelope.GetProperty("string_prop")
+	if !exists {
+		t.Fatal("Expected property 'string_prop' to exist")
+	}
+
+	if value != "test string" {
+		t.Errorf("Expected property value 'test string', got %v", value)
+	}
+
+	// Test int property
+	value, exists = envelope.GetProperty("int_prop")
+	if !exists {
+		t.Fatal("Expected property 'int_prop' to exist")
+	}
+
+	if value != 42 {
+		t.Errorf("Expected property value 42, got %v", value)
+	}
+
+	// Test bool property
+	value, exists = envelope.GetProperty("bool_prop")
+	if !exists {
+		t.Fatal("Expected property 'bool_prop' to exist")
+	}
+
+	if value != true {
+		t.Errorf("Expected property value true, got %v", value)
+	}
+
+	// Test map property
+	value, exists = envelope.GetProperty("map_prop")
+	if !exists {
+		t.Fatal("Expected property 'map_prop' to exist")
+	}
+
+	mapValue, ok := value.(map[string]interface{})
+	if !ok {
+		t.Fatal("Expected property to be map[string]interface{}")
+	}
+
+	if mapValue["nested"] != "value" {
+		t.Errorf("Expected nested value 'value', got %v", mapValue["nested"])
+	}
+
+	// Test non-existent property
+	_, exists = envelope.GetProperty("non-existent")
+	if exists {
+		t.Error("Expected property 'non-existent' not to exist")
+	}
+}
+
+func TestUnmarshalPayload(t *testing.T) {
+	payload := map[string]interface{}{
+		"message": "hello world",
+		"count":   123,
+		"active":  true,
+	}
+
+	envelope, err := NewEnvelope("source", "destination", "type", payload)
+	if err != nil {
+		t.Fatalf("Failed to create envelope: %v", err)
+	}
+
+	// Test unmarshaling to struct
+	type TestPayload struct {
+		Message string `json:"message"`
+		Count   int    `json:"count"`
+		Active  bool   `json:"active"`
+	}
+
+	var testPayload TestPayload
+	err = envelope.UnmarshalPayload(&testPayload)
+	if err != nil {
+		t.Fatalf("Failed to unmarshal payload: %v", err)
+	}
+
+	if testPayload.Message != "hello world" {
+		t.Errorf("Expected message 'hello world', got %s", testPayload.Message)
+	}
+
+	if testPayload.Count != 123 {
+		t.Errorf("Expected count 123, got %d", testPayload.Count)
+	}
+
+	if !testPayload.Active {
+		t.Error("Expected active to be true")
+	}
+
+	// Test unmarshaling to map
+	var mapPayload map[string]interface{}
+	err = envelope.UnmarshalPayload(&mapPayload)
+	if err != nil {
+		t.Fatalf("Failed to unmarshal payload to map: %v", err)
+	}
+
+	if mapPayload["message"] != "hello world" {
+		t.Errorf("Expected message 'hello world', got %v", mapPayload["message"])
+	}
+}
+
+func TestIsExpired(t *testing.T) {
+	envelope, err := NewEnvelope("source", "destination", "type", map[string]interface{}{"test": true})
+	if err != nil {
+		t.Fatalf("Failed to create envelope: %v", err)
+	}
+
+	// Test envelope without TTL (should not expire)
+	if envelope.IsExpired() {
+		t.Error("Expected envelope without TTL not to be expired")
+	}
+
+	// Test envelope with future TTL (should not be expired)
+	envelope.TTL = 3600 // 1 hour
+	if envelope.IsExpired() {
+		t.Error("Expected envelope with future TTL not to be expired")
+	}
+
+	// Test envelope with past TTL (should be expired)
+	envelope.Timestamp = time.Now().Add(-2 * time.Hour) // 2 hours ago
+	envelope.TTL = 3600                                 // 1 hour TTL
+	if !envelope.IsExpired() {
+		t.Error("Expected envelope with past TTL to be expired")
+	}
+}
+
+func TestClone(t *testing.T) {
+	// Create original envelope with all fields populated
+	envelope, err := NewEnvelope("source", "destination", "type", map[string]interface{}{"test": "data"})
+	if err != nil {
+		t.Fatalf("Failed to create envelope: %v", err)
+	}
+
+	envelope.CorrelationID = "corr-123"
+	envelope.TTL = 3600
+	envelope.Sequence = 42
+	envelope.TraceID = "trace-123"
+	envelope.SpanID = "span-123"
+	envelope.Priority = 5
+	envelope.Persistent = true
+
+	envelope.SetHeader("header1", "value1")
+	envelope.SetHeader("header2", "value2")
+
+	envelope.SetProperty("prop1", "value1")
+	envelope.SetProperty("prop2", 123)
+
+	envelope.AddHop("agent-001")
+	envelope.AddHop("agent-002")
+
+	// Clone the envelope
+	clone := envelope.Clone()
+
+	// Verify clone is not the same instance
+	if clone == envelope {
+		t.Error("Expected clone to be different instance")
+	}
+
+	// Verify all fields were copied
+	if clone.ID != envelope.ID {
+		t.Errorf("Expected clone ID %s, got %s", envelope.ID, clone.ID)
+	}
+
+	if clone.CorrelationID != envelope.CorrelationID {
+		t.Errorf("Expected clone correlation ID %s, got %s", envelope.CorrelationID, clone.CorrelationID)
+	}
+
+	// Verify headers are deep copied
+	headerValue, headerExists := clone.GetHeader("header1")
+	if !headerExists || headerValue != "value1" {
+		t.Error("Expected cloned headers to be accessible")
+	}
+
+	// Verify properties are deep copied
+	value, exists := clone.GetProperty("prop1")
+	if !exists || value != "value1" {
+		t.Error("Expected cloned properties to be accessible")
+	}
+
+	// Verify route is deep copied
+	if len(clone.Route) != len(envelope.Route) {
+		t.Error("Expected route to be copied")
+	}
+
+	if &clone.Route[0] == &envelope.Route[0] {
+		t.Error("Expected route to be deep copied")
+	}
+
+	// Verify payload is deep copied
+	if &clone.Payload[0] == &envelope.Payload[0] {
+		t.Error("Expected payload to be deep copied")
+	}
+
+	// Verify modifications to clone don't affect original
+	clone.SetHeader("new-header", "new-value")
+	_, exists = envelope.GetHeader("new-header")
+	if exists {
+		t.Error("Expected modifications to clone not to affect original")
+	}
+}
+
+func TestToJSONFromJSON(t *testing.T) {
+	// Create envelope with various fields populated
+	envelope, err := NewEnvelope("test-agent", "pub:test-topic", "test_message", map[string]interface{}{
+		"message": "test data",
+		"count":   42,
+	})
+	if err != nil {
+		t.Fatalf("Failed to create envelope: %v", err)
+	}
+
+	envelope.CorrelationID = "corr-123"
+	envelope.TTL = 3600
+	envelope.TraceID = "trace-123"
+	envelope.Priority = 5
+
+	envelope.SetHeader("content-type", "application/json")
+	envelope.SetProperty("custom", "value")
+	envelope.AddHop("agent-001")
+
+	// Serialize to JSON
+	jsonData, err := envelope.ToJSON()
+	if err != nil {
+		t.Fatalf("Failed to serialize envelope to JSON: %v", err)
+	}
+
+	if len(jsonData) == 0 {
+		t.Error("Expected JSON data to be non-empty")
+	}
+
+	// Deserialize from JSON
+	deserializedEnvelope, err := FromJSON(jsonData)
+	if err != nil {
+		t.Fatalf("Failed to deserialize envelope from JSON: %v", err)
+	}
+
+	// Verify deserialized envelope matches original
+	if deserializedEnvelope.ID != envelope.ID {
+		t.Errorf("Expected ID %s, got %s", envelope.ID, deserializedEnvelope.ID)
+	}
+
+	if deserializedEnvelope.Source != envelope.Source {
+		t.Errorf("Expected source %s, got %s", envelope.Source, deserializedEnvelope.Source)
+	}
+
+	if deserializedEnvelope.CorrelationID != envelope.CorrelationID {
+		t.Errorf("Expected correlation ID %s, got %s", envelope.CorrelationID, deserializedEnvelope.CorrelationID)
+	}
+
+	if deserializedEnvelope.TTL != envelope.TTL {
+		t.Errorf("Expected TTL %d, got %d", envelope.TTL, deserializedEnvelope.TTL)
+	}
+
+	// Verify headers
+	value, exists := deserializedEnvelope.GetHeader("content-type")
+	if !exists || value != "application/json" {
+		t.Error("Expected header to be deserialized correctly")
+	}
+
+	// Verify properties
+	propValue, propExists := deserializedEnvelope.GetProperty("custom")
+	if !propExists || propValue != "value" {
+		t.Error("Expected property to be deserialized correctly")
+	}
+
+	// Verify route
+	if len(deserializedEnvelope.Route) != 1 || deserializedEnvelope.Route[0] != "agent-001" {
+		t.Error("Expected route to be deserialized correctly")
+	}
+}
+
+func TestMessageSize(t *testing.T) {
+	// Create small envelope
+	smallEnvelope, err := NewEnvelope("source", "dest", "type", map[string]interface{}{"test": "small"})
+	if err != nil {
+		t.Fatalf("Failed to create small envelope: %v", err)
+	}
+
+	smallSize := smallEnvelope.MessageSize()
+	if smallSize <= 0 {
+		t.Error("Expected positive message size for small envelope")
+	}
+
+	// Create large envelope
+	largePayload := make(map[string]interface{})
+	for i := 0; i < 100; i++ {
+		largePayload[fmt.Sprintf("key%d", i)] = fmt.Sprintf("value%d with some extra data to make it larger", i)
+	}
+
+	largeEnvelope, err := NewEnvelope("source", "dest", "type", largePayload)
+	if err != nil {
+		t.Fatalf("Failed to create large envelope: %v", err)
+	}
+
+	largeSize := largeEnvelope.MessageSize()
+	if largeSize <= smallSize {
+		t.Error("Expected large envelope to have larger message size than small envelope")
+	}
+}
+
+func TestValidate(t *testing.T) {
+	// Test valid envelope
+	validEnvelope, err := NewEnvelope("source", "destination", "type", map[string]interface{}{"test": true})
+	if err != nil {
+		t.Fatalf("Failed to create valid envelope: %v", err)
+	}
+
+	err = validEnvelope.Validate()
+	if err != nil {
+		t.Errorf("Expected valid envelope to pass validation, got error: %v", err)
+	}
+
+	// Test envelope without ID
+	invalidEnvelope := &Envelope{
+		Source:      "source",
+		Destination: "destination",
+		MessageType: "type",
+		Payload:     json.RawMessage(`{"test": true}`),
+	}
+
+	err = invalidEnvelope.Validate()
+	if err == nil {
+		t.Fatal("Expected validation error for envelope without ID")
+	}
+
+	validationError, ok := err.(*ValidationError)
+	if !ok {
+		t.Fatal("Expected ValidationError type")
+	}
+
+	if validationError.Field != "id" {
+		t.Errorf("Expected field 'id', got %s", validationError.Field)
+	}
+
+	// Test envelope without source
+	invalidEnvelope = &Envelope{
+		ID:          "test-id",
+		Destination: "destination",
+		MessageType: "type",
+		Payload:     json.RawMessage(`{"test": true}`),
+	}
+
+	err = invalidEnvelope.Validate()
+	if err == nil {
+		t.Fatal("Expected validation error for envelope without source")
+	}
+
+	validationError, ok = err.(*ValidationError)
+	if !ok {
+		t.Fatal("Expected ValidationError type")
+	}
+
+	if validationError.Field != "source" {
+		t.Errorf("Expected field 'source', got %s", validationError.Field)
+	}
+
+	// Test envelope without destination
+	invalidEnvelope = &Envelope{
+		ID:          "test-id",
+		Source:      "source",
+		MessageType: "type",
+		Payload:     json.RawMessage(`{"test": true}`),
+	}
+
+	err = invalidEnvelope.Validate()
+	if err == nil {
+		t.Fatal("Expected validation error for envelope without destination")
+	}
+
+	validationError, ok = err.(*ValidationError)
+	if !ok {
+		t.Fatal("Expected ValidationError type")
+	}
+
+	if validationError.Field != "destination" {
+		t.Errorf("Expected field 'destination', got %s", validationError.Field)
+	}
+
+	// Test envelope without message type
+	invalidEnvelope = &Envelope{
+		ID:          "test-id",
+		Source:      "source",
+		Destination: "destination",
+		Payload:     json.RawMessage(`{"test": true}`),
+	}
+
+	err = invalidEnvelope.Validate()
+	if err == nil {
+		t.Fatal("Expected validation error for envelope without message type")
+	}
+
+	validationError, ok = err.(*ValidationError)
+	if !ok {
+		t.Fatal("Expected ValidationError type")
+	}
+
+	if validationError.Field != "message_type" {
+		t.Errorf("Expected field 'message_type', got %s", validationError.Field)
+	}
+
+	// Test envelope without payload
+	invalidEnvelope = &Envelope{
+		ID:          "test-id",
+		Source:      "source",
+		Destination: "destination",
+		MessageType: "type",
+	}
+
+	err = invalidEnvelope.Validate()
+	if err == nil {
+		t.Fatal("Expected validation error for envelope without payload")
+	}
+
+	validationError, ok = err.(*ValidationError)
+	if !ok {
+		t.Fatal("Expected ValidationError type")
+	}
+
+	if validationError.Field != "payload" {
+		t.Errorf("Expected field 'payload', got %s", validationError.Field)
+	}
+}
+
+func TestValidationError(t *testing.T) {
+	err := &ValidationError{
+		Field:   "test_field",
+		Message: "test message",
+	}
+
+	expectedError := "test_field: test message"
+	if err.Error() != expectedError {
+		t.Errorf("Expected error message '%s', got '%s'", expectedError, err.Error())
+	}
+}
+
+func TestEnvelopeWithNilMaps(t *testing.T) {
+	// Test envelope with nil maps (can happen during deserialization)
+	envelope := &Envelope{
+		ID:          uuid.New().String(),
+		Source:      "source",
+		Destination: "destination",
+		MessageType: "type",
+		Timestamp:   time.Now(),
+		Payload:     json.RawMessage(`{"test": true}`),
+		Headers:     nil,
+		Properties:  nil,
+		Route:       nil,
+	}
+
+	// Test getting header from nil map
+	_, exists := envelope.GetHeader("test")
+	if exists {
+		t.Error("Expected header not to exist when headers map is nil")
+	}
+
+	// Test getting property from nil map
+	_, exists = envelope.GetProperty("test")
+	if exists {
+		t.Error("Expected property not to exist when properties map is nil")
+	}
+
+	// Test setting header on nil map
+	envelope.SetHeader("test", "value")
+	if envelope.Headers == nil {
+		t.Error("Expected headers map to be created")
+	}
+
+	value, exists := envelope.GetHeader("test")
+	if !exists || value != "value" {
+		t.Error("Expected header to be set and retrievable")
+	}
+
+	// Test setting property on nil map
+	envelope.SetProperty("test", "value")
+	if envelope.Properties == nil {
+		t.Error("Expected properties map to be created")
+	}
+
+	if !exists || value != "value" {
+		t.Error("Expected property to be set and retrievable")
+	}
+}
+
+func TestRequestResponsePattern(t *testing.T) {
+	// Simulate a complete request/response pattern
+	requestPayload := map[string]interface{}{
+		"operation": "process_file",
+		"file_path": "/test/sample.txt",
+		"options": map[string]interface{}{
+			"format": "json",
+			"include_metadata": true,
+		},
+	}
+
+	// Create request envelope
+	requestEnvelope, err := NewEnvelope("client-agent", "pub:file-processing", "file_process_request", requestPayload)
+	if err != nil {
+		t.Fatalf("Failed to create request envelope: %v", err)
+	}
+
+	// Set trace ID for distributed tracing
+	requestEnvelope.TraceID = "trace-" + uuid.New().String()
+	requestEnvelope.SpanID = "span-" + uuid.New().String()
+	requestEnvelope.Priority = 7
+
+	// Processing agent receives request and creates response
+	responsePayload := map[string]interface{}{
+		"status": "completed",
+		"result": map[string]interface{}{
+			"lines_processed": 150,
+			"output_file": "/test/processed/sample.json",
+			"processing_time_ms": 250,
+		},
+		"metadata": map[string]interface{}{
+			"processor": "text-processor-v2.1",
+			"timestamp": time.Now().Format(time.RFC3339),
+		},
+	}
+
+	// Create reply envelope
+	replyEnvelope, err := NewReplyEnvelope(requestEnvelope, "processor-agent", responsePayload)
+	if err != nil {
+		t.Fatalf("Failed to create reply envelope: %v", err)
+	}
+
+	// Verify request/response correlation
+	if replyEnvelope.CorrelationID != requestEnvelope.ID {
+		t.Error("Expected reply to be correlated with request")
+	}
+
+	if replyEnvelope.TraceID != requestEnvelope.TraceID {
+		t.Error("Expected reply to maintain trace context")
+	}
+
+	if replyEnvelope.Destination != requestEnvelope.Source {
+		t.Error("Expected reply to be routed back to request source")
+	}
+
+	// Verify payload structure
+	var replyPayloadData map[string]interface{}
+	err = replyEnvelope.UnmarshalPayload(&replyPayloadData)
+	if err != nil {
+		t.Fatalf("Failed to unmarshal reply payload: %v", err)
+	}
+
+	if replyPayloadData["status"] != "completed" {
+		t.Error("Expected reply to contain processing status")
+	}
+
+	result, ok := replyPayloadData["result"].(map[string]interface{})
+	if !ok {
+		t.Fatal("Expected result to be a map")
+	}
+
+	if result["lines_processed"] != float64(150) {
+		t.Error("Expected reply to contain processing results")
+	}
+
+	t.Log("Request/response pattern test completed successfully")
+}

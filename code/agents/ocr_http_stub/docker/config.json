@@ -1,0 +1,23 @@
+{
+  "service_name": "GOX OCR Service",
+  "version": "1.0.0",
+  "max_file_size": 52428800,
+  "supported_formats": [".png", ".jpg", ".jpeg", ".tiff", ".bmp", ".pdf"],
+  "default_languages": ["eng"],
+  "default_psm": 3,
+  "default_oem": 3,
+  "temp_dir": "/app/temp",
+  "upload_dir": "/app/uploads",
+  "output_dir": "/app/output",
+  "processing": {
+    "enable_preprocessing": true,
+    "enable_confidence_filtering": true,
+    "min_confidence": 30,
+    "max_concurrent_requests": 10,
+    "request_timeout": 300
+  },
+  "logging": {
+    "level": "INFO",
+    "format": "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  }
+}

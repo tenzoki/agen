@@ -1,0 +1,26 @@
+_collaboration/
+bin/
+
+# ML Models (large files, not checked in)
+trained/**/*.onnx
+trained/**/*.onnx_data
+trained/**/*.pb
+trained/**/pytorch_model.bin
+trained/**/model.safetensors
+trained/**/vocab.txt
+trained/**/tokenizer.json
+trained/**/tokenizer_config.json
+trained/**/special_tokens_map.json
+trained/**/config.json
+trained/**/sentencepiece.bpe.model
+
+# Python virtual environment for model conversion
+trained/venv/
+trained/.venv/
+
+# But keep model infrastructure files
+!trained/README.md
+!trained/*.py
+!trained/*.sh
+!trained/requirements.txt
+!trained/.gitkeep

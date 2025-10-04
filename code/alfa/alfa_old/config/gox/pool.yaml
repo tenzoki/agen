@@ -1,0 +1,34 @@
+pool:
+  agent_types:
+    # Named Entity Recognition Agent
+    - agent_type: "ner-agent"
+      binary: "agents/ner_agent/main.go"
+      operator: "spawn"
+      capabilities: ["named-entity-recognition", "multilingual-ner", "entity-extraction"]
+      config:
+        model_path: "models/ner/xlm-roberta-ner.onnx"
+        tokenizer_path: "models/ner/"
+        max_seq_length: 128
+        confidence_threshold: 0.5
+        enable_debug: false
+
+    # Anonymizer Agent
+    - agent_type: "anonymizer"
+      binary: "agents/anonymizer/main.go"
+      operator: "spawn"
+      capabilities: ["text-anonymization", "privacy-protection", "pseudonymization"]
+      config:
+        storage_agent_id: "anon-store-001"
+        pipeline_version: "v1.0"
+        enable_debug: false
+        timeout_seconds: 30
+
+    # Anonymization Store Agent
+    - agent_type: "anonymization-store"
+      binary: "agents/anonymization_store/main.go"
+      operator: "spawn"
+      capabilities: ["persistent-storage", "mapping-storage", "reverse-lookup"]
+      config:
+        data_path: "/tmp/gox-anonymization-store"
+        max_file_size: 104857600  # 100MB
+        enable_debug: false

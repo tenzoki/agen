@@ -1,0 +1,330 @@
+package agent
+
+import (
+	"os"
+	"testing"
+	"time"
+
+	"github.com/tenzoki/gox/internal/client"
+)
+
+// MockAgentRunner for testing
+type MockAgentRunner struct {
+	initCalled    bool
+	processCalled bool
+	cleanupCalled bool
+	config        map[string]interface{}
+}
+
+func (m *MockAgentRunner) Init(base *BaseAgent) error {
+	m.initCalled = true
+	return nil
+}
+
+func (m *MockAgentRunner) ProcessMessage(msg *client.BrokerMessage, base *BaseAgent) (*client.BrokerMessage, error) {
+	m.processCalled = true
+	return &client.BrokerMessage{
+		ID:      "response-" + msg.ID,
+		Type:    "response",
+		Target:  msg.Target,
+		Payload: map[string]interface{}{
+			"status": "processed",
+			"original_id": msg.ID,
+		},
+		Meta: make(map[string]interface{}),
+	}, nil
+}
+
+func (m *MockAgentRunner) Cleanup(base *BaseAgent) {
+	m.cleanupCalled = true
+}
+
+func TestNewFramework(t *testing.T) {
+	runner := &MockAgentRunner{}
+	framework := NewFramework(runner, "test-agent")
+
+	if framework == nil {
+		t.Fatal("Expected framework to be created")
+	}
+	if framework.agentType != "test-agent" {
+		t.Errorf("Expected agent type 'test-agent', got '%s'", framework.agentType)
+	}
+	if framework.runner != runner {
+		t.Error("Expected runner to be set correctly")
+	}
+}
+
+func TestBaseAgentInitialization(t *testing.T) {
+	// Test with environment variables
+	oldAgentID := getEnv("GOX_AGENT_ID", "")
+	oldDebug := getEnv("GOX_DEBUG", "")
+
+	setEnv("GOX_AGENT_ID", "test-agent-123")
+	setEnv("GOX_DEBUG", "true")
+
+	defer func() {
+		setEnv("GOX_AGENT_ID", oldAgentID)
+		setEnv("GOX_DEBUG", oldDebug)
+	}()
+
+	// Create test config
+	config := AgentConfig{
+		ID:             "test-agent-123",
+		AgentType:      "test-agent",
+		Debug:          true,
+		SupportAddress: "localhost:8080",
+		Capabilities:   []string{"test"},
+	}
+
+	// Since NewBaseAgent requires actual service connections, we'll test with mock setup
+	// For now, we'll test the config structure
+	if config.ID != "test-agent-123" {
+		t.Errorf("Expected agent ID 'test-agent-123', got '%s'", config.ID)
+	}
+
+	if !config.Debug {
+		t.Error("Expected debug to be enabled")
+	}
+}
+
+func TestBaseAgentConfiguration(t *testing.T) {
+	// Test configuration structure
+	config := map[string]interface{}{
+		"key1": "value1",
+		"key2": 42,
+		"nested": map[string]interface{}{
+			"subkey": "subvalue",
+		},
+	}
+
+	// Test configuration access patterns
+	if val, ok := config["key1"].(string); !ok || val != "value1" {
+		t.Errorf("Expected 'value1', got %v", config["key1"])
+	}
+
+	if val, ok := config["key2"].(int); !ok || val != 42 {
+		t.Errorf("Expected 42, got %v", config["key2"])
+	}
+
+	nested, ok := config["nested"].(map[string]interface{})
+	if !ok {
+		t.Fatal("Expected nested to be a map")
+	}
+
+	if val, ok := nested["subkey"].(string); !ok || val != "subvalue" {
+		t.Errorf("Expected 'subvalue', got %v", nested["subkey"])
+	}
+}
+
+func TestAgentStateManagement(t *testing.T) {
+	// Test agent state constants
+	if StateInstalled != "installed" {
+		t.Errorf("Expected StateInstalled to be 'installed', got %v", StateInstalled)
+	}
+
+	if StateConfigured != "configured" {
+		t.Errorf("Expected StateConfigured to be 'configured', got %v", StateConfigured)
+	}
+
+	if StateRunning != "running" {
+		t.Errorf("Expected StateRunning to be 'running', got %v", StateRunning)
+	}
+
+	if StateStopped != "stopped" {
+		t.Errorf("Expected StateStopped to be 'stopped', got %v", StateStopped)
+	}
+
+	// Test state transitions
+	transitions, exists := StateTransitions[StateInstalled]
+	if !exists {
+		t.Error("Expected transitions for StateInstalled to exist")
+	}
+
+	// StateInstalled should transition to StateConfigured or StateError
+	expectedTransitions := []AgentState{StateConfigured, StateError}
+	if len(transitions) != len(expectedTransitions) {
+		t.Errorf("Expected %d transitions from StateInstalled, got %d", len(expectedTransitions), len(transitions))
+	}
+
+	for _, expected := range expectedTransitions {
+		found := false
+		for _, actual := range transitions {
+			if actual == expected {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("Expected transition from StateInstalled to %v to be allowed", expected)
+		}
+	}
+}
+
+func TestAgentLogging(t *testing.T) {
+	// Test logging functionality would require actual agent instance
+	// For now, test log message structure
+	testMessage := "Test log message"
+	if len(testMessage) == 0 {
+		t.Error("Expected test message to have content")
+	}
+
+	// Test different log levels can be represented
+	logLevels := []string{"INFO", "ERROR", "DEBUG", "WARN"}
+	for _, level := range logLevels {
+		if len(level) == 0 {
+			t.Errorf("Expected log level %s to have content", level)
+		}
+	}
+}
+
+func TestAgentMetricsAndHealth(t *testing.T) {
+	// Test metrics structure
+	metrics := map[string]interface{}{
+		"messages_processed": 2,
+		"errors":            1,
+		"uptime_seconds":    300,
+		"memory_usage_mb":   128,
+	}
+
+	if metrics["messages_processed"] != 2 {
+		t.Errorf("Expected 2 messages processed, got %v", metrics["messages_processed"])
+	}
+	if metrics["errors"] != 1 {
+		t.Errorf("Expected 1 error, got %v", metrics["errors"])
+	}
+
+	// Test health status structure
+	health := map[string]interface{}{
+		"state":              "running",
+		"last_activity":      "2024-09-27T10:00:00Z",
+		"connection_status":  "connected",
+		"configuration_status": "loaded",
+	}
+
+	if health["state"] != "running" {
+		t.Errorf("Expected health state to be 'running', got %v", health["state"])
+	}
+
+	if health["connection_status"] != "connected" {
+		t.Errorf("Expected connection status to be 'connected', got %v", health["connection_status"])
+	}
+}
+
+func TestFrameworkInitialization(t *testing.T) {
+	runner := &MockAgentRunner{}
+	}
+
+func TestMessageProcessing(t *testing.T) {
+	runner := &MockAgentRunner{}
+	}
+
+	// Create test message
+
+	// Process message
+	}
+
+	payload, ok := response.Payload.(map[string]interface{})
+	if !ok {
+		t.Fatal("Expected response payload to be map[string]interface{}")
+	}
+
+	if payload["status"] != "processed" {
+		t.Errorf("Expected status 'processed', got '%v'", payload["status"])
+	}
+}
+
+func TestFrameworkShutdown(t *testing.T) {
+	runner := &MockAgentRunner{}
+	}
+
+	// No framework.Shutdown method in current implementation; skip shutdown logic.
+
+	if !runner.cleanupCalled {
+		t.Error("Expected runner.Cleanup to be called during shutdown")
+	}
+}
+
+func TestConnectionHandlers(t *testing.T) {
+	config := AgentConfig{
+		ID:             "test-id",
+		AgentType:      "test",
+		Debug:          true,
+		SupportAddress: "localhost:8080",
+		Capabilities:   []string{"test"},
+	}
+	base, err := NewBaseAgent(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	handlers, err := NewConnectionHandlers("", "", base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if handlers == nil {
+		t.Fatal("Expected connection handlers to be created")
+	}
+
+	// Test connection callbacks
+	handlers.OnConnect(func() {
+		base.LogInfo("Connected to broker")
+	})
+
+	handlers.OnDisconnect(func() {
+		base.LogInfo("Disconnected from broker")
+	})
+
+	handlers.OnError(func(err error) {
+		base.LogError("Connection error: " + err.Error())
+	})
+
+	// Test that handlers are set (in real implementation, these would be called by connection events)
+}
+
+func TestAgentLifecycle(t *testing.T) {
+	runner := &MockAgentRunner{}
+	framework := NewFramework(runner, "test-agent")
+
+	// Test complete lifecycle
+
+	// 1. Initialize
+   // No framework.Initialize method in current implementation; skip or validate base agent init directly.
+	if err != nil {
+		t.Fatalf("Initialization failed: %v", err)
+	}
+
+	// 2. Start (in real implementation, this would start the message loop)
+	framework.Start()
+
+	// 3. Process some messages
+	testMessage := &client.BrokerMessage{
+		ID:     "lifecycle-test-001",
+		Type:   "test",
+		Target: "test-agent",
+		Payload: map[string]interface{}{"test": true},
+		Meta:    make(map[string]interface{}),
+	}
+
+	}
+	if !runner.processCalled {
+		t.Error("Expected ProcessMessage to be called")
+	}
+	if !runner.cleanupCalled {
+		t.Error("Expected Cleanup to be called")
+	}
+}
+
+// Helper functions for environment variables
+func getEnv(key, defaultValue string) string {
+	if value := os.Getenv(key); value != "" {
+		return value
+	}
+	return defaultValue
+}
+
+func setEnv(key, value string) {
+	if value == "" {
+		os.Unsetenv(key)
+	} else {
+		os.Setenv(key, value)
+	}
+}

@@ -1,0 +1,896 @@
+package broker
+
+import (
+	"context"
+	"encoding/json"
+	"net"
+	"testing"
+	"time"
+
+	"github.com/tenzoki/gox/internal/envelope"
+)
+
+// MockConnection creates a test connection for unit testing
+func createMockConnection() *Connection {
+	// Create pipe pair for testing
+	serverConn, clientConn := net.Pipe()
+
+	conn := &Connection{
+		ID:       "test-conn-001",
+		Conn:     serverConn,
+		Encoder:  json.NewEncoder(serverConn),
+		Decoder:  json.NewDecoder(serverConn),
+		AgentID:  "test-agent-001",
+		LastSeen: time.Now(),
+	}
+
+	// Close client side to clean up
+	go func() {
+		time.Sleep(100 * time.Millisecond)
+		clientConn.Close()
+	}()
+
+	return conn
+}
+
+func TestNewService(t *testing.T) {
+	config := BrokerConfig{
+		Port:     ":9001",
+		Protocol: "tcp",
+		Codec:    "json",
+		Debug:    true,
+	}
+
+	service := NewService(config)
+	if service == nil {
+		t.Fatal("Expected broker service to be created")
+	}
+
+	if service.port != ":9001" {
+		t.Errorf("Expected port :9001, got %s", service.port)
+	}
+
+	if service.protocol != "tcp" {
+		t.Errorf("Expected protocol tcp, got %s", service.protocol)
+	}
+
+	if service.codec != "json" {
+		t.Errorf("Expected codec json, got %s", service.codec)
+	}
+
+	if !service.debug {
+		t.Error("Expected debug to be enabled")
+	}
+
+	// Verify collections are initialized
+	if service.topics == nil {
+		t.Error("Expected topics map to be initialized")
+	}
+
+	if service.pipes == nil {
+		t.Error("Expected pipes map to be initialized")
+	}
+
+	if service.connections == nil {
+		t.Error("Expected connections map to be initialized")
+	}
+}
+
+func TestNewServiceWithDefaults(t *testing.T) {
+	service := NewService(nil)
+	if service == nil {
+		t.Fatal("Expected broker service to be created with defaults")
+	}
+
+	if service.port != ":9001" {
+		t.Errorf("Expected default port :9001, got %s", service.port)
+	}
+
+	if service.protocol != "tcp" {
+		t.Errorf("Expected default protocol tcp, got %s", service.protocol)
+	}
+
+	if service.codec != "json" {
+		t.Errorf("Expected default codec json, got %s", service.codec)
+	}
+
+	if service.debug {
+		t.Error("Expected debug to be disabled by default")
+	}
+}
+
+func TestBrokerConfigStruct(t *testing.T) {
+	// Test with anonymous struct matching BrokerConfig fields
+	anonConfig := struct {
+		Port, Protocol, Codec string
+		Debug                 bool
+	}{
+		Port:     ":8080",
+		Protocol: "tcp",
+		Codec:    "json",
+		Debug:    false,
+	}
+
+	service := NewService(anonConfig)
+	if service == nil {
+		t.Fatal("Expected service to be created from anonymous struct")
+	}
+
+	if service.port != ":8080" {
+		t.Errorf("Expected port :8080, got %s", service.port)
+	}
+}
+
+func TestMessageCreation(t *testing.T) {
+	msg := Message{
+		ID:        "msg-001",
+	}
+
+	if msg.Type != "test_message" {
+		t.Errorf("Expected type test_message, got %s", msg.Type)
+	}
+
+	if msg.Target != "test-target" {
+		t.Errorf("Expected target test-target, got %s", msg.Target)
+	}
+
+	payload, ok := msg.Payload.(map[string]interface{})
+	if !ok {
+		t.Fatal("Expected payload to be map[string]interface{}")
+	}
+
+	if payload["data"] != "test" {
+		t.Errorf("Expected payload data 'test', got %v", payload["data"])
+	}
+}
+
+func TestBrokerRequestCreation(t *testing.T) {
+	params := map[string]interface{}{
+		"topic":   "test-topic",
+		"message": map[string]interface{}{"id": "test", "type": "test"},
+	}
+
+	paramsJSON, err := json.Marshal(params)
+	if err != nil {
+		t.Fatalf("Failed to marshal params: %v", err)
+	}
+
+	req := BrokerRequest{
+		ID:     "req-001",
+		Method: "publish",
+		Params: json.RawMessage(paramsJSON),
+	}
+
+	if req.ID != "req-001" {
+		t.Errorf("Expected ID req-001, got %s", req.ID)
+	}
+
+	if req.Method != "publish" {
+		t.Errorf("Expected method publish, got %s", req.Method)
+	}
+
+	// Verify params can be unmarshalled
+	var unmarshalledParams map[string]interface{}
+	err = json.Unmarshal(req.Params, &unmarshalledParams)
+	if err != nil {
+		t.Fatalf("Failed to unmarshal params: %v", err)
+	}
+
+	if unmarshalledParams["topic"] != "test-topic" {
+		t.Errorf("Expected topic test-topic, got %v", unmarshalledParams["topic"])
+	}
+}
+
+func TestBrokerResponseCreation(t *testing.T) {
+	// Test success response
+	successResp := BrokerResponse{
+		ID:     "req-001",
+		Result: "success",
+	}
+
+	if successResp.ID != "req-001" {
+		t.Errorf("Expected ID req-001, got %s", successResp.ID)
+	}
+
+	if successResp.Result != "success" {
+		t.Errorf("Expected result success, got %v", successResp.Result)
+	}
+
+	if successResp.Error != nil {
+		t.Error("Expected no error in success response")
+	}
+
+	// Test error response
+	errorResp := BrokerResponse{
+		ID: "req-002",
+		Error: &BrokerError{
+			Code:    -32602,
+			Message: "Invalid params",
+		},
+	}
+
+	if errorResp.Error == nil {
+		t.Fatal("Expected error in error response")
+	}
+
+	if errorResp.Error.Code != -32602 {
+		t.Errorf("Expected error code -32602, got %d", errorResp.Error.Code)
+	}
+
+	if errorResp.Error.Message != "Invalid params" {
+		t.Errorf("Expected error message 'Invalid params', got %s", errorResp.Error.Message)
+	}
+}
+
+func TestHandleConnect(t *testing.T) {
+	service := NewService(BrokerConfig{Debug: true})
+	conn := createMockConnection()
+
+	params := map[string]interface{}{
+		"agent_id": "test-agent-123",
+	}
+
+	paramsJSON, err := json.Marshal(params)
+	if err != nil {
+		t.Fatalf("Failed to marshal params: %v", err)
+	}
+
+	req := &BrokerRequest{
+		ID:     "connect-001",
+		Method: "connect",
+		Params: json.RawMessage(paramsJSON),
+	}
+
+	resp := service.handleConnect(conn, req)
+
+	if resp.ID != "connect-001" {
+		t.Errorf("Expected response ID connect-001, got %s", resp.ID)
+	}
+
+	if resp.Error != nil {
+		t.Errorf("Expected no error, got %v", resp.Error)
+	}
+
+	if resp.Result != "connected" {
+		t.Errorf("Expected result 'connected', got %v", resp.Result)
+	}
+
+	if conn.AgentID != "test-agent-123" {
+		t.Errorf("Expected agent ID test-agent-123, got %s", conn.AgentID)
+	}
+}
+
+func TestHandleConnectInvalidParams(t *testing.T) {
+	service := NewService(BrokerConfig{Debug: true})
+	conn := createMockConnection()
+
+	// Invalid JSON params
+	req := &BrokerRequest{
+		ID:     "connect-002",
+		Method: "connect",
+		Params: json.RawMessage(`{"invalid": json}`),
+	}
+
+	resp := service.handleConnect(conn, req)
+
+	if resp.Error == nil {
+		t.Fatal("Expected error response")
+	}
+
+	if resp.Error.Code != -32602 {
+		t.Errorf("Expected error code -32602, got %d", resp.Error.Code)
+	}
+
+	if resp.Error.Message != "Invalid params" {
+		t.Errorf("Expected error message 'Invalid params', got %s", resp.Error.Message)
+	}
+}
+
+func TestHandlePublish(t *testing.T) {
+	service := NewService(BrokerConfig{Debug: true})
+	conn := createMockConnection()
+
+	// Create subscriber
+	subscriber := createMockConnection()
+	subscriber.ID = "subscriber-001"
+	subscriber.AgentID = "subscriber-agent"
+
+	// Create topic and add subscriber
+	service.topicsMux.Lock()
+	topic := &Topic{
+		Name:        "test-topic",
+		Subscribers: []*Connection{subscriber},
+		Messages:    make([]*Message, 0, 100),
+		Envelopes:   make([]*envelope.Envelope, 0, 100),
+	}
+	service.topics["test-topic"] = topic
+	service.topicsMux.Unlock()
+
+	params := map[string]interface{}{
+		"topic": "test-topic",
+		"message": map[string]interface{}{
+			"id":      "msg-001",
+			"type":    "test",
+			"payload": map[string]interface{}{"data": "test data"},
+			"meta":    map[string]interface{}{"source": "test"},
+		},
+	}
+
+	paramsJSON, err := json.Marshal(params)
+	if err != nil {
+		t.Fatalf("Failed to marshal params: %v", err)
+	}
+
+	req := &BrokerRequest{
+		ID:     "publish-001",
+		Method: "publish",
+		Params: json.RawMessage(paramsJSON),
+	}
+
+	resp := service.handlePublish(conn, req)
+
+	if resp.Error != nil {
+		t.Errorf("Expected no error, got %v", resp.Error)
+	}
+
+	if resp.Result != "published" {
+		t.Errorf("Expected result 'published', got %v", resp.Result)
+	}
+
+	// Verify message was added to topic
+	topic.mux.RLock()
+	if len(topic.Messages) != 1 {
+		t.Errorf("Expected 1 message in topic, got %d", len(topic.Messages))
+	}
+
+	msg := topic.Messages[0]
+	if msg.ID != "msg-001" {
+		t.Errorf("Expected message ID msg-001, got %s", msg.ID)
+	}
+
+	if msg.Target != "pub:test-topic" {
+		t.Errorf("Expected target pub:test-topic, got %s", msg.Target)
+	}
+	topic.mux.RUnlock()
+}
+
+func TestHandleSubscribe(t *testing.T) {
+	service := NewService(BrokerConfig{Debug: true})
+	conn := createMockConnection()
+
+	params := map[string]interface{}{
+		"topic": "test-topic",
+	}
+
+	paramsJSON, err := json.Marshal(params)
+	if err != nil {
+		t.Fatalf("Failed to marshal params: %v", err)
+	}
+
+	req := &BrokerRequest{
+		ID:     "subscribe-001",
+		Method: "subscribe",
+		Params: json.RawMessage(paramsJSON),
+	}
+
+	resp := service.handleSubscribe(conn, req)
+
+	if resp.Error != nil {
+		t.Errorf("Expected no error, got %v", resp.Error)
+	}
+
+	if resp.Result != "subscribed" {
+		t.Errorf("Expected result 'subscribed', got %v", resp.Result)
+	}
+
+	// Verify topic was created and connection was added as subscriber
+	service.topicsMux.RLock()
+	topic, exists := service.topics["test-topic"]
+	service.topicsMux.RUnlock()
+
+	if !exists {
+		t.Fatal("Expected topic to be created")
+	}
+
+	topic.mux.RLock()
+	if len(topic.Subscribers) != 1 {
+		t.Errorf("Expected 1 subscriber, got %d", len(topic.Subscribers))
+	}
+
+	if topic.Subscribers[0].ID != conn.ID {
+		t.Errorf("Expected subscriber ID %s, got %s", conn.ID, topic.Subscribers[0].ID)
+	}
+	topic.mux.RUnlock()
+}
+
+func TestHandleSubscribeDuplicate(t *testing.T) {
+	service := NewService(BrokerConfig{Debug: true})
+	conn := createMockConnection()
+
+	// Create topic with connection already subscribed
+	service.topicsMux.Lock()
+	topic := &Topic{
+		Name:        "test-topic",
+		Subscribers: []*Connection{conn},
+		Messages:    make([]*Message, 0, 100),
+		Envelopes:   make([]*envelope.Envelope, 0, 100),
+	}
+	service.topics["test-topic"] = topic
+	service.topicsMux.Unlock()
+
+	params := map[string]interface{}{
+		"topic": "test-topic",
+	}
+
+	paramsJSON, err := json.Marshal(params)
+	if err != nil {
+		t.Fatalf("Failed to marshal params: %v", err)
+	}
+
+	req := &BrokerRequest{
+		ID:     "subscribe-002",
+		Method: "subscribe",
+		Params: json.RawMessage(paramsJSON),
+	}
+
+	resp := service.handleSubscribe(conn, req)
+
+	if resp.Error != nil {
+		t.Errorf("Expected no error, got %v", resp.Error)
+	}
+
+	// Verify no duplicate subscription
+	topic.mux.RLock()
+	if len(topic.Subscribers) != 1 {
+		t.Errorf("Expected 1 subscriber (no duplicate), got %d", len(topic.Subscribers))
+	}
+	topic.mux.RUnlock()
+}
+
+func TestHandleSendPipe(t *testing.T) {
+	service := NewService(BrokerConfig{Debug: true})
+	conn := createMockConnection()
+
+	params := map[string]interface{}{
+		"pipe": "test-pipe",
+		"message": map[string]interface{}{
+			"id":      "msg-001",
+			"type":    "test",
+			"payload": map[string]interface{}{"data": "test data"},
+			"meta":    map[string]interface{}{"source": "test"},
+		},
+	}
+
+	paramsJSON, err := json.Marshal(params)
+	if err != nil {
+		t.Fatalf("Failed to marshal params: %v", err)
+	}
+
+	req := &BrokerRequest{
+		ID:     "send-pipe-001",
+		Method: "send_pipe",
+		Params: json.RawMessage(paramsJSON),
+	}
+
+	resp := service.handleSendPipe(conn, req)
+
+	if resp.Error != nil {
+		t.Errorf("Expected no error, got %v", resp.Error)
+	}
+
+	if resp.Result != "sent" {
+		t.Errorf("Expected result 'sent', got %v", resp.Result)
+	}
+
+	// Verify pipe was created and message was queued
+	service.pipesMux.RLock()
+	pipe, exists := service.pipes["test-pipe"]
+	service.pipesMux.RUnlock()
+
+	if !exists {
+		t.Fatal("Expected pipe to be created")
+	}
+
+	// Check that message is in pipe
+	select {
+	case msg := <-pipe.Messages:
+		if msg.ID != "msg-001" {
+			t.Errorf("Expected message ID msg-001, got %s", msg.ID)
+		}
+		if msg.Target != "pipe:test-pipe" {
+			t.Errorf("Expected target pipe:test-pipe, got %s", msg.Target)
+		}
+	case <-time.After(100 * time.Millisecond):
+		t.Error("Expected message to be in pipe")
+	}
+}
+
+func TestHandleReceivePipe(t *testing.T) {
+	service := NewService(BrokerConfig{Debug: true})
+	conn := createMockConnection()
+
+	// Create pipe with a message
+	service.pipesMux.Lock()
+	pipe := &Pipe{
+		Name:      "test-pipe",
+		Messages:  make(chan *Message, 100),
+		Envelopes: make(chan *envelope.Envelope, 100),
+	}
+
+	testMessage := &Message{
+		ID:        "msg-001",
+	service.pipes["test-pipe"] = pipe
+	service.pipesMux.Unlock()
+
+	params := map[string]interface{}{
+		"pipe":       "test-pipe",
+		"timeout_ms": 1000,
+	}
+
+	paramsJSON, err := json.Marshal(params)
+	if err != nil {
+		t.Fatalf("Failed to marshal params: %v", err)
+	}
+
+	req := &BrokerRequest{
+		ID:     "receive-pipe-001",
+		Method: "receive_pipe",
+		Params: json.RawMessage(paramsJSON),
+	}
+
+	resp := service.handleReceivePipe(conn, req)
+
+	if resp.Error != nil {
+		t.Errorf("Expected no error, got %v", resp.Error)
+	}
+
+	// Verify message was received
+	resultMsg, ok := resp.Result.(*Message)
+	if !ok {
+		t.Fatal("Expected result to be a Message")
+	}
+
+	if resultMsg.ID != "msg-001" {
+		t.Errorf("Expected message ID msg-001, got %s", resultMsg.ID)
+	}
+}
+
+func TestHandleReceivePipeTimeout(t *testing.T) {
+	service := NewService(BrokerConfig{Debug: true})
+	conn := createMockConnection()
+
+	params := map[string]interface{}{
+		"pipe":       "empty-pipe",
+		"timeout_ms": 100, // Very short timeout
+	}
+
+	paramsJSON, err := json.Marshal(params)
+	if err != nil {
+		t.Fatalf("Failed to marshal params: %v", err)
+	}
+
+	req := &BrokerRequest{
+		ID:     "receive-pipe-002",
+		Method: "receive_pipe",
+		Params: json.RawMessage(paramsJSON),
+	}
+
+	resp := service.handleReceivePipe(conn, req)
+
+	if resp.Error == nil {
+		t.Fatal("Expected timeout error")
+	}
+
+	if resp.Error.Code != -32603 {
+		t.Errorf("Expected error code -32603, got %d", resp.Error.Code)
+	}
+
+	if resp.Error.Message != "Timeout waiting for message" {
+		t.Errorf("Expected timeout error message, got %s", resp.Error.Message)
+	}
+}
+
+func TestHandlePublishEnvelope(t *testing.T) {
+	service := NewService(BrokerConfig{Debug: true})
+	conn := createMockConnection()
+
+	// Create test envelope
+	testEnvelope := &envelope.Envelope{
+		ID:          "env-001",
+		Source:      "test-agent",
+		Destination: "",
+		MessageType:        "test_envelope",
+		Properties:    map[string]interface{}{"timestamp": time.Now().Format(time.RFC3339)},
+	}
+
+	params := map[string]interface{}{
+		"topic":    "test-topic",
+		"envelope": testEnvelope,
+	}
+
+	paramsJSON, err := json.Marshal(params)
+	if err != nil {
+		t.Fatalf("Failed to marshal params: %v", err)
+	}
+
+	req := &BrokerRequest{
+		ID:     "publish-envelope-001",
+		Method: "publish_envelope",
+		Params: json.RawMessage(paramsJSON),
+	}
+
+	resp := service.handlePublishEnvelope(conn, req)
+
+	if resp.Error != nil {
+		t.Errorf("Expected no error, got %v", resp.Error)
+	}
+
+	if resp.Result != "published" {
+		t.Errorf("Expected result 'published', got %v", resp.Result)
+	}
+
+	// Verify topic was created and envelope was added
+	service.topicsMux.RLock()
+	topic, exists := service.topics["test-topic"]
+	service.topicsMux.RUnlock()
+
+	if !exists {
+		t.Fatal("Expected topic to be created")
+	}
+
+	topic.mux.RLock()
+	if len(topic.Envelopes) != 1 {
+		t.Errorf("Expected 1 envelope in topic, got %d", len(topic.Envelopes))
+	}
+
+	env := topic.Envelopes[0]
+	if env.ID != "env-001" {
+		t.Errorf("Expected envelope ID env-001, got %s", env.ID)
+	}
+
+	if env.Destination != "pub:test-topic" {
+		t.Errorf("Expected destination pub:test-topic, got %s", env.Destination)
+	}
+	topic.mux.RUnlock()
+}
+
+func TestHandleRequestUnknownMethod(t *testing.T) {
+	service := NewService(BrokerConfig{Debug: true})
+	conn := createMockConnection()
+
+	req := &BrokerRequest{
+		ID:     "unknown-001",
+		Method: "unknown_method",
+		Params: json.RawMessage(`{}`),
+	}
+
+	resp := service.handleRequest(conn, req)
+
+	if resp.Error == nil {
+		t.Fatal("Expected error response")
+	}
+
+	if resp.Error.Code != -32601 {
+		t.Errorf("Expected error code -32601, got %d", resp.Error.Code)
+	}
+
+	expectedMessage := "Method not found: unknown_method"
+	if resp.Error.Message != expectedMessage {
+		t.Errorf("Expected error message '%s', got %s", expectedMessage, resp.Error.Message)
+	}
+}
+
+func TestTopicMessageHistory(t *testing.T) {
+	service := NewService(BrokerConfig{Debug: true})
+	conn := createMockConnection()
+
+	// Create topic
+	service.topicsMux.Lock()
+	topic := &Topic{
+		Name:        "history-topic",
+		Subscribers: make([]*Connection, 0),
+		Messages:    make([]*Message, 0, 100),
+		Envelopes:   make([]*envelope.Envelope, 0, 100),
+	}
+	service.topics["history-topic"] = topic
+	service.topicsMux.Unlock()
+
+	// Publish messages to fill up history
+	for i := 0; i < 105; i++ { // Exceed buffer size
+		params := map[string]interface{}{
+			"topic": "history-topic",
+			"message": map[string]interface{}{
+			Params: json.RawMessage(paramsJSON),
+		}
+
+		service.handlePublish(conn, req)
+	}
+
+	// Verify history is limited to 100 messages
+	topic.mux.RLock()
+	if len(topic.Messages) != 100 {
+		t.Errorf("Expected 100 messages in history, got %d", len(topic.Messages))
+	}
+
+	// Verify oldest messages were removed (should start from msg-005)
+	firstMsg := topic.Messages[0]
+	if firstMsg.ID != "msg-005" {
+		t.Errorf("Expected first message ID msg-005, got %s", firstMsg.ID)
+	}
+
+	lastMsg := topic.Messages[99]
+	if lastMsg.ID != "msg-104" {
+		t.Errorf("Expected last message ID msg-104, got %s", lastMsg.ID)
+	}
+	topic.mux.RUnlock()
+}
+
+func TestPipeBufferOverflow(t *testing.T) {
+	service := NewService(BrokerConfig{Debug: true})
+	conn := createMockConnection()
+
+	// Create pipe and fill buffer
+	service.pipesMux.Lock()
+	pipe := &Pipe{
+		Name:      "full-pipe",
+		Messages:  make(chan *Message, 2), // Small buffer for testing
+		Envelopes: make(chan *envelope.Envelope, 2),
+	}
+	service.pipes["full-pipe"] = pipe
+	service.pipesMux.Unlock()
+
+	// Fill the buffer
+	for i := 0; i < 2; i++ {
+		params := map[string]interface{}{
+			"pipe": "full-pipe",
+			"message": map[string]interface{}{
+			Params: json.RawMessage(paramsJSON),
+		}
+
+		resp := service.handleSendPipe(conn, req)
+		if resp.Error != nil {
+			t.Errorf("Expected no error for message %d, got %v", i, resp.Error)
+		}
+	}
+
+	// Try to send one more message - should fail
+	params := map[string]interface{}{
+		"pipe": "full-pipe",
+		"message": map[string]interface{}{
+			"id":      "msg-overflow",
+			"type":    "test",
+			"payload": map[string]interface{}{},
+			"meta":    map[string]interface{}{},
+		},
+	}
+
+	paramsJSON, _ := json.Marshal(params)
+	req := &BrokerRequest{
+		ID:     "send-overflow",
+		Method: "send_pipe",
+		Params: json.RawMessage(paramsJSON),
+	}
+
+	resp := service.handleSendPipe(conn, req)
+	if resp.Error == nil {
+		t.Fatal("Expected buffer overflow error")
+	}
+
+	if resp.Error.Code != -32603 {
+		t.Errorf("Expected error code -32603, got %d", resp.Error.Code)
+	}
+
+	if resp.Error.Message != "Pipe buffer full" {
+		t.Errorf("Expected 'Pipe buffer full' error, got %s", resp.Error.Message)
+	}
+}
+
+func TestConnectionManagement(t *testing.T) {
+	service := NewService(BrokerConfig{Debug: true})
+
+	// Verify initial state
+	service.connMux.RLock()
+	initialCount := len(service.connections)
+	service.connMux.RUnlock()
+
+	if initialCount != 0 {
+		t.Errorf("Expected 0 initial connections, got %d", initialCount)
+	}
+
+	// Create mock connection
+	conn := createMockConnection()
+
+	// Simulate connection registration
+	service.connMux.Lock()
+	service.connections[conn.ID] = conn
+	service.connMux.Unlock()
+
+	// Verify connection was added
+	service.connMux.RLock()
+	if len(service.connections) != 1 {
+		t.Errorf("Expected 1 connection, got %d", len(service.connections))
+	}
+
+	storedConn, exists := service.connections[conn.ID]
+	service.connMux.RUnlock()
+
+	if !exists {
+		t.Fatal("Expected connection to exist")
+	}
+
+	if storedConn.ID != conn.ID {
+		t.Errorf("Expected connection ID %s, got %s", conn.ID, storedConn.ID)
+	}
+
+	// Simulate connection cleanup
+	service.connMux.Lock()
+	delete(service.connections, conn.ID)
+	service.connMux.Unlock()
+
+	// Verify connection was removed
+	service.connMux.RLock()
+	finalCount := len(service.connections)
+	service.connMux.RUnlock()
+
+	if finalCount != 0 {
+		t.Errorf("Expected 0 connections after cleanup, got %d", finalCount)
+	}
+}
+
+func TestServiceInfo(t *testing.T) {
+	info := Info{
+		Protocol: "tcp",
+		Address:  "localhost",
+		Port:     ":9001",
+		Codec:    "json",
+	}
+
+	if info.Protocol != "tcp" {
+		t.Errorf("Expected protocol tcp, got %s", info.Protocol)
+	}
+
+	if info.Address != "localhost" {
+		t.Errorf("Expected address localhost, got %s", info.Address)
+	}
+
+	if info.Port != ":9001" {
+		t.Errorf("Expected port :9001, got %s", info.Port)
+	}
+
+	if info.Codec != "json" {
+		t.Errorf("Expected codec json, got %s", info.Codec)
+	}
+}
+
+func TestStartServiceGracefulShutdown(t *testing.T) {
+	service := NewService(BrokerConfig{
+		Port:     ":0", // Use any available port
+		Protocol: "tcp",
+		Codec:    "json",
+		Debug:    false,
+	})
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	// Start service in goroutine
+	errChan := make(chan error, 1)
+	go func() {
+		errChan <- service.Start(ctx)
+	}()
+
+	// Give service time to start
+	time.Sleep(100 * time.Millisecond)
+
+	// Cancel context to trigger shutdown
+	cancel()
+
+	// Wait for service to shut down
+	select {
+	case err := <-errChan:
+		if err != nil {
+			t.Errorf("Expected clean shutdown, got error: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Error("Service did not shut down within timeout")
+	}
+}

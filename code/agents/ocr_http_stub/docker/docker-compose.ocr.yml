@@ -1,0 +1,125 @@
+# Docker Compose for GOX OCR Service
+#
+# This provides a complete OCR-as-a-Service setup for the GOX framework
+# with load balancing, health monitoring, and production-ready configuration.
+#
+# Usage:
+#   docker compose -f docker-compose.ocr.yml up -d
+#   curl -F "image=@test.png" http://localhost:8000/ocr
+
+services:
+  # Primary OCR Service Instance
+  gox-ocr-1:
+    build: ./ocr-service
+    container_name: gox-ocr-1
+    restart: unless-stopped
+    environment:
+      - SERVICE_NAME=GOX OCR Service 1
+      - MAX_FILE_SIZE=52428800  # 50MB
+      - WORKER_PROCESSES=2
+    volumes:
+      - ocr_temp_1:/app/temp
+      - ocr_uploads_1:/app/uploads
+      - ocr_output_1:/app/output
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - ocr-network
+
+  # Secondary OCR Service Instance (for load balancing)
+  gox-ocr-2:
+    build: ./ocr-service
+    container_name: gox-ocr-2
+    restart: unless-stopped
+    environment:
+      - SERVICE_NAME=GOX OCR Service 2
+      - MAX_FILE_SIZE=52428800  # 50MB
+      - WORKER_PROCESSES=2
+    volumes:
+      - ocr_temp_2:/app/temp
+      - ocr_uploads_2:/app/uploads
+      - ocr_output_2:/app/output
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - ocr-network
+
+  # Nginx Load Balancer
+  ocr-proxy:
+    image: nginx:alpine
+    container_name: gox-ocr-proxy
+    restart: unless-stopped
+    ports:
+      - "8000:80"
+    volumes:
+      - ./nginx-ocr.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - gox-ocr-1
+      - gox-ocr-2
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - ocr-network
+
+  # Redis for session/result caching (optional)
+  ocr-redis:
+    image: redis:7-alpine
+    container_name: gox-ocr-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - ocr_redis_data:/data
+    networks:
+      - ocr-network
+
+  # Monitoring with Prometheus metrics (optional)
+  ocr-exporter:
+    image: prom/node-exporter:latest
+    container_name: gox-ocr-exporter
+    restart: unless-stopped
+    ports:
+      - "9100:9100"
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    networks:
+      - ocr-network
+
+volumes:
+  ocr_temp_1:
+    driver: local
+  ocr_uploads_1:
+    driver: local
+  ocr_output_1:
+    driver: local
+  ocr_temp_2:
+    driver: local
+  ocr_uploads_2:
+    driver: local
+  ocr_output_2:
+    driver: local
+  ocr_redis_data:
+    driver: local
+
+networks:
+  ocr-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.25.0.0/16

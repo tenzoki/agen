@@ -1,0 +1,673 @@
+package chunks
+
+import (
+	"crypto/sha256"
+	"encoding/hex"
+	"fmt"
+	"log/slog"
+	"os"
+	"testing"
+	"time"
+
+	"github.com/tenzoki/gox/internal/storage"
+	"github.com/tenzoki/gox/test/testutil"
+)
+
+// MockStorageClient implements StorageInterface for testing
+type MockStorageClient struct {
+	vertices  map[string]map[string]interface{}
+	edges     map[string][]string
+	files     map[string][]byte
+	queryResults map[string][]interface{}
+}
+
+func NewMockStorageClient() *MockStorageClient {
+	return &MockStorageClient{
+		vertices:     make(map[string]map[string]interface{}),
+		edges:        make(map[string][]string),
+		files:        make(map[string][]byte),
+		queryResults: make(map[string][]interface{}),
+	}
+}
+
+func (m *MockStorageClient) CreateVertex(label string, properties map[string]interface{}) (string, error) {
+	id := properties["id"].(string)
+	m.vertices[id] = properties
+	return id, nil
+}
+
+func (m *MockStorageClient) CreateEdge(from, to, label string) error {
+	edgeKey := fmt.Sprintf("%s-%s-%s", from, to, label)
+	m.edges[edgeKey] = []string{from, to}
+	return nil
+}
+
+func (m *MockStorageClient) GraphQuery(query string) ([]interface{}, error) {
+	if results, exists := m.queryResults[query]; exists {
+		return results, nil
+	}
+	return []interface{}{}, nil
+}
+
+func (m *MockStorageClient) UpdateVertexProperties(vertexID string, updates map[string]interface{}) error {
+	if vertex, exists := m.vertices[vertexID]; exists {
+		for key, value := range updates {
+			vertex[key] = value
+		}
+	}
+	return nil
+}
+
+func (m *MockStorageClient) BatchCreateVertices(vertices []storage.BatchVertex) error {
+	for _, v := range vertices {
+		m.vertices[v.ID] = v.Properties
+	}
+	return nil
+}
+
+func (m *MockStorageClient) BatchCreateEdges(edges []storage.BatchEdge) error {
+	for _, e := range edges {
+		edgeKey := fmt.Sprintf("%s-%s-%s", e.From, e.To, e.Label)
+		m.edges[edgeKey] = []string{e.From, e.To}
+	}
+	return nil
+}
+
+func (m *MockStorageClient) BatchUpdateVertexProperties(vertexIDs []string, updates map[string]interface{}) error {
+	for _, id := range vertexIDs {
+		if vertex, exists := m.vertices[id]; exists {
+			for key, value := range updates {
+				vertex[key] = value
+			}
+		}
+	}
+	return nil
+}
+
+func (m *MockStorageClient) ParallelGraphQuery(queries []string) ([][]interface{}, error) {
+	results := make([][]interface{}, len(queries))
+	for i, query := range queries {
+		if result, exists := m.queryResults[query]; exists {
+			results[i] = result
+		} else {
+			results[i] = []interface{}{}
+		}
+	}
+	return results, nil
+}
+
+func (m *MockStorageClient) StoreFile(data []byte, metadata map[string]interface{}) (string, error) {
+	hasher := sha256.New()
+	hasher.Write(data)
+	hash := hex.EncodeToString(hasher.Sum(nil))
+	m.files[hash] = data
+	return hash, nil
+}
+
+func (m *MockStorageClient) RetrieveFile(fileID string) ([]byte, error) {
+	if data, exists := m.files[fileID]; exists {
+		return data, nil
+	}
+	return nil, fmt.Errorf("file not found: %s", fileID)
+}
+
+// Set up mock query results for testing
+func (m *MockStorageClient) SetQueryResult(query string, result []interface{}) {
+	m.queryResults[query] = result
+}
+
+func TestChunkTrackerInitialization(t *testing.T) {
+	storage := NewMockStorageClient()
+	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
+
+	tracker := NewChunkTracker(storage, logger)
+	if tracker == nil {
+		t.Fatal("Expected chunk tracker to be created")
+	}
+
+	if tracker.storageClient != storage {
+		t.Error("Expected storage client to be set correctly")
+	}
+
+	if tracker.logger != logger {
+		t.Error("Expected logger to be set correctly")
+	}
+}
+
+func TestFileInfoCreation(t *testing.T) {
+	// Use real test file
+	testFilePath := testutil.GetTestDataPath(testutil.SampleArticlePath)
+
+	fileInfo, err := os.Stat(testFilePath)
+	if err != nil {
+		t.Fatalf("Failed to stat test file: %v", err)
+	}
+
+	file := &FileInfo{
+		Path:       testFilePath,
+		Hash:       "test-hash-123",
+		Size:       fileInfo.Size(),
+		MimeType:   "text/plain",
+		CreatedAt:  fileInfo.ModTime(),
+		ModifiedAt: fileInfo.ModTime(),
+		ChunkCount: 5,
+	}
+
+	if file.Path != testFilePath {
+		t.Errorf("Expected path %s, got %s", testFilePath, file.Path)
+	}
+
+	if file.Hash != "test-hash-123" {
+		t.Errorf("Expected hash 'test-hash-123', got %s", file.Hash)
+	}
+
+	if file.Size != fileInfo.Size() {
+		t.Errorf("Expected size %d, got %d", fileInfo.Size(), file.Size)
+	}
+
+	if file.ChunkCount != 5 {
+		t.Errorf("Expected chunk count 5, got %d", file.ChunkCount)
+	}
+}
+
+func TestChunkInfoCreation(t *testing.T) {
+	chunk := &ChunkInfo{
+		Index:       0,
+		Hash:        "chunk-hash-abc",
+		Size:        1024,
+		StartOffset: 0,
+		EndOffset:   1023,
+		Status:      "created",
+	}
+
+	if chunk.Index != 0 {
+		t.Errorf("Expected index 0, got %d", chunk.Index)
+	}
+
+	if chunk.Hash != "chunk-hash-abc" {
+		t.Errorf("Expected hash 'chunk-hash-abc', got %s", chunk.Hash)
+	}
+
+	if chunk.Size != 1024 {
+		t.Errorf("Expected size 1024, got %d", chunk.Size)
+	}
+
+	if chunk.Status != "created" {
+		t.Errorf("Expected status 'created', got %s", chunk.Status)
+	}
+}
+
+func TestRegisterFileSplit(t *testing.T) {
+	storage := NewMockStorageClient()
+	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
+	tracker := NewChunkTracker(storage, logger)
+
+	// Create test file info
+	fileInfo := &FileInfo{
+		Path:       "/test/sample.txt",
+		Hash:       "file-hash-123",
+		Size:       2048,
+		MimeType:   "text/plain",
+		CreatedAt:  time.Now(),
+		ModifiedAt: time.Now(),
+	}
+
+	// Create test chunks
+	chunks := []*ChunkInfo{
+		{Index: 0, Hash: "chunk-0-hash", Size: 1024, StartOffset: 0, EndOffset: 1023, Status: "created"},
+		{Index: 1, Hash: "chunk-1-hash", Size: 1024, StartOffset: 1024, EndOffset: 2047, Status: "created"},
+	}
+
+	// Create split metadata
+	metadata := &SplitMetadata{
+		SplitMethod:    "size_based",
+		ChunkSize:      1024,
+		TotalChunks:    2,
+		CreatedAt:      time.Now(),
+		CreatedBy:      "test-agent",
+		CustomMetadata: make(map[string]interface{}),
+	}
+
+	// Register the file split
+	err := tracker.RegisterFileSplit(fileInfo, chunks, metadata)
+	if err != nil {
+		t.Fatalf("Failed to register file split: %v", err)
+	}
+
+	// Verify file vertex was created
+	fileVertexID := fmt.Sprintf("file:original:%s", fileInfo.Hash)
+	if _, exists := storage.vertices[fileVertexID]; !exists {
+		t.Error("Expected file vertex to be created")
+	}
+
+	// Verify metadata vertex was created
+	metadataVertexID := fmt.Sprintf("metadata:%s", fileInfo.Hash)
+	if _, exists := storage.vertices[metadataVertexID]; !exists {
+		t.Error("Expected metadata vertex to be created")
+	}
+
+	// Verify chunk vertices were created
+	for _, chunk := range chunks {
+		chunkVertexID := fmt.Sprintf("chunk:%s:%d", fileInfo.Hash, chunk.Index)
+		if _, exists := storage.vertices[chunkVertexID]; !exists {
+			t.Errorf("Expected chunk vertex %d to be created", chunk.Index)
+		}
+	}
+}
+
+func TestUpdateChunkStatus(t *testing.T) {
+	storage := NewMockStorageClient()
+	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
+	tracker := NewChunkTracker(storage, logger)
+
+	fileHash := "test-file-hash"
+	chunkIndex := 0
+	chunkID := fmt.Sprintf("chunk:%s:%d", fileHash, chunkIndex)
+
+	// Create a mock chunk vertex
+	storage.vertices[chunkID] = map[string]interface{}{
+		"id": chunkID,
+		"type": "file_chunk",
+		"chunk_index": float64(chunkIndex),
+		"status": "created",
+	}
+
+	// Set up query result for current status
+	statusQuery := fmt.Sprintf(`
+		g.V().has('id', '%s').values('status')
+	`, chunkID)
+	storage.SetQueryResult(statusQuery, []interface{}{"created"})
+
+	// Update chunk status
+	err := tracker.UpdateChunkStatus(fileHash, chunkIndex, "processing", "test-agent")
+	if err != nil {
+		t.Fatalf("Failed to update chunk status: %v", err)
+	}
+
+	// Verify status was updated
+	if vertex, exists := storage.vertices[chunkID]; exists {
+		if status := vertex["status"]; status != "processing" {
+			t.Errorf("Expected status 'processing', got %s", status)
+		}
+	} else {
+		t.Error("Expected chunk vertex to exist")
+	}
+}
+
+func TestGetProcessingProgress(t *testing.T) {
+	storage := NewMockStorageClient()
+	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
+	tracker := NewChunkTracker(storage, logger)
+
+	fileHash := "test-file-hash"
+
+	// Set up query result for status counts
+	statusQuery := fmt.Sprintf(`
+		g.V().has('id', 'file:original:%s')
+		.out('HAS_CHUNK')
+		.groupCount().by('status')
+	`, fileHash)
+
+	statusCounts := map[string]interface{}{
+		"completed": float64(3),
+		"processing": float64(1),
+		"created": float64(1),
+	}
+	storage.SetQueryResult(statusQuery, []interface{}{statusCounts})
+
+	// Get processing progress
+	progress, err := tracker.GetProcessingProgress(fileHash)
+	if err != nil {
+		t.Fatalf("Failed to get processing progress: %v", err)
+	}
+
+	if progress.FileHash != fileHash {
+		t.Errorf("Expected file hash %s, got %s", fileHash, progress.FileHash)
+	}
+
+	if progress.TotalChunks != 5 {
+		t.Errorf("Expected total chunks 5, got %d", progress.TotalChunks)
+	}
+
+	if progress.CompletedChunks != 3 {
+		t.Errorf("Expected completed chunks 3, got %d", progress.CompletedChunks)
+	}
+
+	expectedProgress := float64(3) / float64(5) * 100
+	if progress.ProgressPercent != expectedProgress {
+		t.Errorf("Expected progress %.2f%%, got %.2f%%", expectedProgress, progress.ProgressPercent)
+	}
+}
+
+func TestChunkOperationsInitialization(t *testing.T) {
+	storage := NewMockStorageClient()
+	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
+	tracker := NewChunkTracker(storage, logger)
+
+	operations := NewChunkOperations(tracker)
+	if operations == nil {
+		t.Fatal("Expected chunk operations to be created")
+	}
+
+	if operations.tracker != tracker {
+		t.Error("Expected tracker to be set correctly")
+	}
+}
+
+func TestSplitFileIntoChunks(t *testing.T) {
+	storage := NewMockStorageClient()
+	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
+	tracker := NewChunkTracker(storage, logger)
+	operations := NewChunkOperations(tracker)
+
+	// Use real test file
+	testFilePath := testutil.GetTestDataPath(testutil.SampleArticlePath)
+
+	// Split file into chunks
+	fileInfo, chunks, metadata, err := operations.SplitFileIntoChunks(testFilePath, 1024, "size_based")
+	if err != nil {
+		t.Fatalf("Failed to split file: %v", err)
+	}
+
+	if fileInfo == nil {
+		t.Fatal("Expected file info to be returned")
+	}
+
+	if fileInfo.Path != testFilePath {
+		t.Errorf("Expected path %s, got %s", testFilePath, fileInfo.Path)
+	}
+
+	if len(chunks) == 0 {
+		t.Error("Expected chunks to be created")
+	}
+
+	if metadata == nil {
+		t.Fatal("Expected metadata to be returned")
+	}
+
+	if metadata.SplitMethod != "size_based" {
+		t.Errorf("Expected split method 'size_based', got %s", metadata.SplitMethod)
+	}
+
+	if metadata.ChunkSize != 1024 {
+		t.Errorf("Expected chunk size 1024, got %d", metadata.ChunkSize)
+	}
+
+	// Verify chunk order and offsets
+	for i, chunk := range chunks {
+		if chunk.Index != i {
+			t.Errorf("Expected chunk index %d, got %d", i, chunk.Index)
+		}
+
+		expectedStartOffset := int64(i) * 1024
+		if chunk.StartOffset != expectedStartOffset {
+			t.Errorf("Expected start offset %d, got %d", expectedStartOffset, chunk.StartOffset)
+		}
+
+		if chunk.Hash == "" {
+			t.Errorf("Expected chunk %d to have a hash", i)
+		}
+
+		if chunk.Size <= 0 {
+			t.Errorf("Expected chunk %d to have positive size", i)
+		}
+	}
+}
+
+func TestStoreAndRetrieveChunkData(t *testing.T) {
+	storage := NewMockStorageClient()
+	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
+	tracker := NewChunkTracker(storage, logger)
+	operations := NewChunkOperations(tracker)
+
+	// Create test chunk data
+	testData := []byte("This is test chunk data for testing storage and retrieval operations.")
+
+	// Calculate hash for the test data
+	hasher := sha256.New()
+	hasher.Write(testData)
+	expectedHash := hex.EncodeToString(hasher.Sum(nil))
+
+	// Create chunk info
+	chunk := &ChunkInfo{
+		Index:       0,
+		Hash:        expectedHash,
+		Size:        int64(len(testData)),
+		StartOffset: 0,
+		EndOffset:   int64(len(testData)) - 1,
+		Status:      "created",
+	}
+
+	// Store chunk data
+	err := operations.StoreChunkData(chunk, testData)
+	if err != nil {
+		t.Fatalf("Failed to store chunk data: %v", err)
+	}
+
+	// Retrieve chunk data
+	retrievedData, err := operations.GetChunkData(chunk)
+	if err != nil {
+		t.Fatalf("Failed to retrieve chunk data: %v", err)
+	}
+
+	// Verify retrieved data matches original
+	if len(retrievedData) != len(testData) {
+		t.Errorf("Expected data length %d, got %d", len(testData), len(retrievedData))
+	}
+
+	if string(retrievedData) != string(testData) {
+		t.Error("Retrieved data does not match original data")
+	}
+}
+
+func TestValidateChunkIntegrity(t *testing.T) {
+	storage := NewMockStorageClient()
+	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
+	tracker := NewChunkTracker(storage, logger)
+	operations := NewChunkOperations(tracker)
+
+	fileHash := "test-file-hash"
+
+	// Create test chunks with stored data
+	testData1 := []byte("First chunk data")
+	testData2 := []byte("Second chunk data")
+
+	hasher1 := sha256.New()
+	hasher1.Write(testData1)
+	hash1 := hex.EncodeToString(hasher1.Sum(nil))
+
+	hasher2 := sha256.New()
+	hasher2.Write(testData2)
+	hash2 := hex.EncodeToString(hasher2.Sum(nil))
+
+	}
+
+	// Store test data
+	// Set up query result for getting chunks
+		g.V().has('id', 'file:original:%s')
+		.out('HAS_CHUNK')
+		.order().by('chunk_index', asc)
+		.valueMap()
+	`, fileHash)
+
+	results := []interface{}{
+		map[string]interface{}{
+			"chunk_index": float64(0),
+			"chunk_hash": hash1,
+			"size": float64(len(testData1)),
+			"start_offset": float64(0),
+			"end_offset": float64(len(testData1) - 1),
+			"status": "completed",
+		},
+		map[string]interface{}{
+			"chunk_index": float64(1),
+			"chunk_hash": hash2,
+			"size": float64(len(testData2)),
+			"start_offset": float64(len(testData1)),
+			"end_offset": float64(len(testData1) + len(testData2) - 1),
+			"status": "completed",
+		},
+	}
+
+	storage.SetQueryResult(query, results)
+
+	// Validate chunk integrity
+	issues, err := operations.ValidateChunkIntegrity(fileHash)
+	if err != nil {
+		t.Fatalf("Failed to validate chunk integrity: %v", err)
+	}
+
+	if len(issues) != 0 {
+		t.Errorf("Expected no integrity issues, got %d: %v", len(issues), issues)
+	}
+}
+
+func TestParallelProcessingCoordinator(t *testing.T) {
+	storage := NewMockStorageClient()
+	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
+	tracker := NewChunkTracker(storage, logger)
+
+	coordinator := NewParallelProcessingCoordinator(tracker, 2)
+	if coordinator == nil {
+		t.Fatal("Expected parallel processing coordinator to be created")
+	}
+
+	if coordinator.maxWorkers != 2 {
+		t.Errorf("Expected max workers 2, got %d", coordinator.maxWorkers)
+	}
+
+	if coordinator.tracker != tracker {
+		t.Error("Expected tracker to be set correctly")
+	}
+
+	if coordinator.operations == nil {
+		t.Error("Expected operations to be initialized")
+	}
+}
+
+func TestMimeTypeDetection(t *testing.T) {
+	storage := NewMockStorageClient()
+	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
+	tracker := NewChunkTracker(storage, logger)
+	operations := NewChunkOperations(tracker)
+
+	testCases := []struct {
+		filePath     string
+		expectedMime string
+	}{
+		{"test.txt", "text/plain"},
+		{"document.md", "text/plain"},
+		{"script.go", "text/plain"},
+		{"data.json", "application/json"},
+		{"config.xml", "application/xml"},
+		{"document.pdf", "application/pdf"},
+		{"image.jpg", "image/jpeg"},
+		{"photo.png", "image/png"},
+		{"archive.zip", "application/zip"},
+		{"unknown.xyz", "application/octet-stream"},
+	}
+
+	for _, tc := range testCases {
+		result := operations.detectMimeType(tc.filePath)
+		if result != tc.expectedMime {
+			t.Errorf("For file %s, expected MIME type %s, got %s", tc.filePath, tc.expectedMime, result)
+		}
+	}
+}
+
+func TestOptimalChunkSizeCalculation(t *testing.T) {
+	storage := NewMockStorageClient()
+	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
+	tracker := NewChunkTracker(storage, logger)
+	operations := NewChunkOperations(tracker)
+
+	testCases := []struct {
+		fileSize         int64
+		targetChunkCount int
+		fileType         string
+		description      string
+	}{
+		{10240, 5, "text", "Small text file"},
+		{1048576, 10, "binary", "Medium binary file"},
+		{10485760, 20, "compressed", "Large compressed file"},
+		{5242880, 8, "media", "Media file"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.description, func(t *testing.T) {
+			chunkSize := operations.CalculateOptimalChunkSize(tc.fileSize, tc.targetChunkCount, tc.fileType)
+
+			if chunkSize <= 0 {
+				t.Errorf("Expected positive chunk size, got %d", chunkSize)
+			}
+
+			// Verify chunk size is reasonable
+			baseSize := tc.fileSize / int64(tc.targetChunkCount)
+			if chunkSize < baseSize/4 || chunkSize > baseSize*4 {
+				t.Errorf("Chunk size %d seems unreasonable for base size %d", chunkSize, baseSize)
+			}
+		})
+	}
+}
+
+func TestChunkOperationsIntegration(t *testing.T) {
+	storage := NewMockStorageClient()
+	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
+	tracker := NewChunkTracker(storage, logger)
+	operations := NewChunkOperations(tracker)
+
+	// Use real test file
+	testFilePath := testutil.GetTestDataPath(testutil.SampleArticlePath)
+
+	// Complete workflow: split, register, process, validate
+	fileInfo, chunks, metadata, err := operations.SplitFileIntoChunks(testFilePath, 2048, "integration_test")
+	if err != nil {
+		t.Fatalf("Failed to split file: %v", err)
+	}
+
+	// Register the split
+	err = tracker.RegisterFileSplit(fileInfo, chunks, metadata)
+	if err != nil {
+		t.Fatalf("Failed to register file split: %v", err)
+	}
+
+	// Process chunks by storing their data
+	for _, chunk := range chunks {
+		// Read chunk data from original file
+		file, err := os.Open(testFilePath)
+		if err != nil {
+			t.Fatalf("Failed to open file: %v", err)
+		}
+		defer file.Close()
+
+		chunkData := make([]byte, chunk.Size)
+		_, err = file.ReadAt(chunkData, chunk.StartOffset)
+		if err != nil {
+			t.Fatalf("Failed to read chunk data: %v", err)
+		}
+
+		// Store chunk data
+		err = operations.StoreChunkData(chunk, chunkData)
+		if err != nil {
+			t.Fatalf("Failed to store chunk data: %v", err)
+		}
+
+		// Update status to completed
+		err = tracker.UpdateChunkStatus(fileInfo.Hash, chunk.Index, "completed", "integration-test")
+		if err != nil {
+			t.Fatalf("Failed to update chunk status: %v", err)
+		}
+	}
+
+	// Validate integrity
+	issues, err := operations.ValidateChunkIntegrity(fileInfo.Hash)
+	if err != nil {
+		t.Fatalf("Failed to validate integrity: %v", err)
+	}
+
+	if len(issues) > 0 {
+		t.Errorf("Found integrity issues: %v", issues)
+	}
+
+	t.Log("Integration test completed successfully")
+}

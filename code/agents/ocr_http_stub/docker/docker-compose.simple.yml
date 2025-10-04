@@ -1,0 +1,31 @@
+# Simple GOX OCR Service Setup
+# Single OCR instance for testing and development
+
+services:
+  gox-ocr:
+    build: ./ocr-service
+    container_name: gox-ocr-simple
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      - SERVICE_NAME=GOX OCR Service
+      - MAX_FILE_SIZE=52428800  # 50MB
+    volumes:
+      - ocr_temp:/app/temp
+      - ocr_uploads:/app/uploads
+      - ocr_output:/app/output
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  ocr_temp:
+    driver: local
+  ocr_uploads:
+    driver: local
+  ocr_output:
+    driver: local

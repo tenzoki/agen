@@ -1,0 +1,19 @@
+{
+  "stt": {
+    "model": "whisper-1",
+    "language": "",
+    "temperature": 0.0,
+    "timeout": 60000000000,
+    "retry_count": 3,
+    "retry_delay": 1000000000
+  },
+  "tts": {
+    "model": "tts-1",
+    "voice": "alloy",
+    "speed": 1.0,
+    "format": "mp3",
+    "timeout": 60000000000,
+    "retry_count": 3,
+    "retry_delay": 1000000000
+  }
+}

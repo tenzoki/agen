@@ -1,0 +1,195 @@
+package ai
+
+import (
+	"encoding/json"
+	"fmt"
+	"os"
+	"path/filepath"
+	"time"
+)
+
+// ConfigFile represents the configuration file structure
+type ConfigFile struct {
+	DefaultProvider string            `json:"default_provider"` // "anthropic" or "openai"
+	Providers       map[string]Config `json:"providers"`        // Provider-specific configs
+}
+
+// DefaultConfig returns a default configuration
+func DefaultConfig() ConfigFile {
+	return ConfigFile{
+		DefaultProvider: "anthropic",
+		Providers: map[string]Config{
+			"anthropic": {
+				Model:       "claude-3-5-sonnet-20241022",
+				MaxTokens:   4096,
+				Temperature: 1.0,
+				Timeout:     60 * time.Second,
+				RetryCount:  3,
+				RetryDelay:  1 * time.Second,
+			},
+			"openai": {
+				Model:       "gpt-4",
+				MaxTokens:   4096,
+				Temperature: 1.0,
+				Timeout:     60 * time.Second,
+				RetryCount:  3,
+				RetryDelay:  1 * time.Second,
+			},
+		},
+	}
+}
+
+// LoadConfig loads configuration from a file
+func LoadConfig(path string) (*ConfigFile, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read config file: %w", err)
+	}
+
+	// Raw structure to handle nanosecond integers from JSON
+	type rawConfig struct {
+		DefaultProvider string `json:"default_provider"`
+		Providers       map[string]struct {
+			Model       string  `json:"model"`
+			MaxTokens   int     `json:"max_tokens"`
+			Temperature float64 `json:"temperature"`
+			Timeout     int64   `json:"timeout"`
+			RetryCount  int     `json:"retry_count"`
+			RetryDelay  int64   `json:"retry_delay"`
+		} `json:"providers"`
+	}
+
+	var raw rawConfig
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return nil, fmt.Errorf("failed to parse config file: %w", err)
+	}
+
+	// Convert to ConfigFile
+	cfg := ConfigFile{
+		DefaultProvider: raw.DefaultProvider,
+		Providers:       make(map[string]Config),
+	}
+
+	defaults := DefaultConfig()
+	if cfg.DefaultProvider == "" {
+		cfg.DefaultProvider = defaults.DefaultProvider
+	}
+
+	// Convert each provider config
+	for provider, rawProvider := range raw.Providers {
+		providerConfig := Config{
+			Model:       rawProvider.Model,
+			MaxTokens:   rawProvider.MaxTokens,
+			Temperature: rawProvider.Temperature,
+			Timeout:     time.Duration(rawProvider.Timeout),
+			RetryCount:  rawProvider.RetryCount,
+			RetryDelay:  time.Duration(rawProvider.RetryDelay),
+		}
+
+		// Apply defaults if needed
+		defaultProvider := defaults.Providers[provider]
+		if providerConfig.Model == "" {
+			providerConfig.Model = defaultProvider.Model
+		}
+		if providerConfig.MaxTokens == 0 {
+			providerConfig.MaxTokens = defaultProvider.MaxTokens
+		}
+		if providerConfig.Temperature == 0 {
+			providerConfig.Temperature = defaultProvider.Temperature
+		}
+		if providerConfig.Timeout == 0 {
+			providerConfig.Timeout = defaultProvider.Timeout
+		}
+		if providerConfig.RetryCount == 0 {
+			providerConfig.RetryCount = defaultProvider.RetryCount
+		}
+		if providerConfig.RetryDelay == 0 {
+			providerConfig.RetryDelay = defaultProvider.RetryDelay
+		}
+
+		cfg.Providers[provider] = providerConfig
+	}
+
+	return &cfg, nil
+}
+
+// LoadConfigWithEnv loads configuration and merges with environment variables
+func LoadConfigWithEnv(path string) (*ConfigFile, error) {
+	cfg, err := LoadConfig(path)
+	if err != nil {
+		// If file doesn't exist, start with defaults
+		if os.IsNotExist(err) {
+			defaultCfg := DefaultConfig()
+			cfg = &defaultCfg
+		} else {
+			return nil, err
+		}
+	}
+
+	// Override API keys from environment
+	if anthropicKey := os.Getenv("ANTHROPIC_API_KEY"); anthropicKey != "" {
+		if providerCfg, ok := cfg.Providers["anthropic"]; ok {
+			providerCfg.APIKey = anthropicKey
+			cfg.Providers["anthropic"] = providerCfg
+		}
+	}
+
+	if openaiKey := os.Getenv("OPENAI_API_KEY"); openaiKey != "" {
+		if providerCfg, ok := cfg.Providers["openai"]; ok {
+			providerCfg.APIKey = openaiKey
+			cfg.Providers["openai"] = providerCfg
+		}
+	}
+
+	return cfg, nil
+}
+
+// SaveConfig saves configuration to a file
+func SaveConfig(path string, cfg *ConfigFile) error {
+	// Create directory if it doesn't exist
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return fmt.Errorf("failed to create config directory: %w", err)
+	}
+
+	data, err := json.MarshalIndent(cfg, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal config: %w", err)
+	}
+
+	if err := os.WriteFile(path, data, 0644); err != nil {
+		return fmt.Errorf("failed to write config file: %w", err)
+	}
+
+	return nil
+}
+
+// GetConfigPath returns the default configuration file path
+func GetConfigPath() string {
+	return "config/ai-config.json"
+}
+
+// NewLLMFromConfig creates an LLM client from configuration
+func NewLLMFromConfig(cfg *ConfigFile, provider string) (LLM, error) {
+	if provider == "" {
+		provider = cfg.DefaultProvider
+	}
+
+	providerConfig, ok := cfg.Providers[provider]
+	if !ok {
+		return nil, fmt.Errorf("provider %s not found in configuration", provider)
+	}
+
+	if providerConfig.APIKey == "" {
+		return nil, fmt.Errorf("API key not set for provider %s", provider)
+	}
+
+	switch provider {
+	case "anthropic":
+		return NewClaudeClient(providerConfig), nil
+	case "openai":
+		return NewOpenAIClient(providerConfig), nil
+	default:
+		return nil, fmt.Errorf("unsupported provider: %s", provider)
+	}
+}

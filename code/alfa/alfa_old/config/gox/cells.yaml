@@ -1,0 +1,59 @@
+# Cell definitions
+
+# Privacy Protection Cell - NER + Anonymization Pipeline
+cell:
+  id: "privacy:anonymization-pipeline"
+  description: "Named Entity Recognition and Anonymization for privacy protection"
+
+  agents:
+    # Storage agent - must start first to accept mappings
+    - id: "anon-store-001"
+      agent_type: "anonymization-store"
+      ingress: "sub:storage:requests"
+      egress: "pub:storage:responses"
+      config:
+        data_path: "data/anonymization-store"
+        max_file_size: 104857600
+        enable_debug: false
+
+    # NER agent - detects entities
+    - id: "ner-001"
+      agent_type: "ner-agent"
+      ingress: "sub:text:for-analysis"
+      egress: "pub:entities:detected"
+      config:
+        model_path: "models/ner/xlm-roberta-ner.onnx"
+        tokenizer_path: "models/ner/"
+        max_seq_length: 128
+        confidence_threshold: 0.5
+        enable_debug: false
+
+    # Anonymizer agent - replaces entities with pseudonyms
+    - id: "anonymizer-001"
+      agent_type: "anonymizer"
+      ingress: "sub:entities:detected"
+      egress: "pub:text:anonymized"
+      config:
+        storage_agent_id: "anon-store-001"
+        pipeline_version: "v1.0"
+        enable_debug: false
+        timeout_seconds: 30
+
+---
+
+# Standalone NER Cell - for entity extraction only
+cell:
+  id: "nlp:entity-extraction"
+  description: "Named Entity Recognition for multilingual entity extraction"
+
+  agents:
+    - id: "ner-standalone-001"
+      agent_type: "ner-agent"
+      ingress: "sub:text:for-ner"
+      egress: "pub:entities:results"
+      config:
+        model_path: "models/ner/xlm-roberta-ner.onnx"
+        tokenizer_path: "models/ner/"
+        max_seq_length: 256
+        confidence_threshold: 0.6
+        enable_debug: false

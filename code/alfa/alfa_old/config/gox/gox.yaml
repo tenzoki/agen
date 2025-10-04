@@ -1,0 +1,14 @@
+app_name: "alfa-gox"
+debug: true
+support:
+  port: ":9000"
+broker:
+  port: ":9001"
+  protocol: "tcp"
+  codec: "json"
+basedir:
+  - "config/gox"
+pool:
+  - "pool.yaml"
+cells:
+  - "cells.yaml"
