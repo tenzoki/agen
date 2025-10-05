@@ -1,0 +1,537 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Log Index Schema",
+  "description": "Schema for log entry indexing in search systems",
+  "type": "object",
+  "properties": {
+    "index_metadata": {
+      "type": "object",
+      "properties": {
+        "index_id": {
+          "type": "string",
+          "description": "Unique identifier for the indexed log entry"
+        },
+        "indexed_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp when log entry was indexed"
+        },
+        "indexer_version": {
+          "type": "string",
+          "description": "Version of the log indexer"
+        },
+        "index_name": {
+          "type": "string",
+          "description": "Name of the target index"
+        },
+        "log_source": {
+          "type": "string",
+          "description": "Source system that generated the log"
+        },
+        "parsing_success": {
+          "type": "boolean",
+          "description": "Whether log parsing was successful"
+        },
+        "processing_duration": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Time taken to process and index the log entry in milliseconds"
+        }
+      },
+      "required": ["index_id", "indexed_at", "index_name"]
+    },
+    "log_entry": {
+      "type": "object",
+      "properties": {
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Log entry timestamp"
+        },
+        "level": {
+          "type": "string",
+          "enum": ["TRACE", "DEBUG", "INFO", "WARN", "ERROR", "FATAL"],
+          "description": "Log level"
+        },
+        "logger": {
+          "type": "string",
+          "maxLength": 200,
+          "description": "Logger name or component that generated the log"
+        },
+        "message": {
+          "type": "string",
+          "description": "Log message content"
+        },
+        "thread": {
+          "type": "string",
+          "maxLength": 100,
+          "description": "Thread identifier"
+        },
+        "correlation_id": {
+          "type": "string",
+          "maxLength": 100,
+          "description": "Correlation ID for tracking related log entries"
+        },
+        "trace_id": {
+          "type": "string",
+          "maxLength": 100,
+          "description": "Trace ID for distributed tracing"
+        },
+        "span_id": {
+          "type": "string",
+          "maxLength": 100,
+          "description": "Span ID for distributed tracing"
+        }
+      },
+      "required": ["timestamp", "level", "message"]
+    },
+    "system_metadata": {
+      "type": "object",
+      "properties": {
+        "hostname": {
+          "type": "string",
+          "maxLength": 255,
+          "description": "Hostname of the system that generated the log"
+        },
+        "service_name": {
+          "type": "string",
+          "maxLength": 100,
+          "description": "Name of the service or application"
+        },
+        "service_version": {
+          "type": "string",
+          "maxLength": 50,
+          "description": "Version of the service"
+        },
+        "environment": {
+          "type": "string",
+          "enum": ["development", "testing", "staging", "production"],
+          "description": "Environment where the log was generated"
+        },
+        "datacenter": {
+          "type": "string",
+          "maxLength": 50,
+          "description": "Datacenter or region"
+        },
+        "cluster": {
+          "type": "string",
+          "maxLength": 100,
+          "description": "Cluster identifier"
+        },
+        "node": {
+          "type": "string",
+          "maxLength": 100,
+          "description": "Node identifier"
+        },
+        "pod": {
+          "type": "string",
+          "maxLength": 100,
+          "description": "Kubernetes pod name"
+        },
+        "container_id": {
+          "type": "string",
+          "maxLength": 100,
+          "description": "Container identifier"
+        }
+      }
+    },
+    "application_metadata": {
+      "type": "object",
+      "properties": {
+        "user_id": {
+          "type": "string",
+          "maxLength": 100,
+          "description": "User identifier associated with the log entry"
+        },
+        "session_id": {
+          "type": "string",
+          "maxLength": 100,
+          "description": "Session identifier"
+        },
+        "request_id": {
+          "type": "string",
+          "maxLength": 100,
+          "description": "Request identifier"
+        },
+        "transaction_id": {
+          "type": "string",
+          "maxLength": 100,
+          "description": "Transaction identifier"
+        },
+        "operation": {
+          "type": "string",
+          "maxLength": 100,
+          "description": "Operation or action being performed"
+        },
+        "endpoint": {
+          "type": "string",
+          "maxLength": 200,
+          "description": "API endpoint or URL"
+        },
+        "method": {
+          "type": "string",
+          "enum": ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"],
+          "description": "HTTP method"
+        },
+        "status_code": {
+          "type": "integer",
+          "minimum": 100,
+          "maximum": 599,
+          "description": "HTTP status code"
+        },
+        "response_time": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Response time in milliseconds"
+        }
+      }
+    },
+    "extracted_fields": {
+      "type": "object",
+      "properties": {
+        "ip_addresses": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^(?:[0-9]{1,3}\\.){3}[0-9]{1,3}$|^([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}$"
+          },
+          "description": "IP addresses found in the log message"
+        },
+        "urls": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uri"
+          },
+          "description": "URLs found in the log message"
+        },
+        "email_addresses": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "email"
+          },
+          "description": "Email addresses found in the log message"
+        },
+        "file_paths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "File paths mentioned in the log message"
+        },
+        "error_codes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Error codes found in the log message"
+        },
+        "stack_trace": {
+          "type": "string",
+          "description": "Stack trace if present in the log"
+        },
+        "sql_queries": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "SQL queries found in the log message"
+        },
+        "database_operations": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["SELECT", "INSERT", "UPDATE", "DELETE", "CREATE", "DROP", "ALTER"]
+          },
+          "description": "Database operations mentioned"
+        },
+        "performance_metrics": {
+          "type": "object",
+          "properties": {
+            "cpu_usage": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100
+            },
+            "memory_usage": {
+              "type": "string"
+            },
+            "disk_usage": {
+              "type": "string"
+            },
+            "network_io": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "labels": {
+      "type": "object",
+      "properties": {
+        "environment": {
+          "type": "string",
+          "enum": ["development", "testing", "staging", "production"]
+        },
+        "component": {
+          "type": "string",
+          "maxLength": 100,
+          "description": "Component or module name"
+        },
+        "subsystem": {
+          "type": "string",
+          "maxLength": 100,
+          "description": "Subsystem within the application"
+        },
+        "pipeline": {
+          "type": "string",
+          "maxLength": 100,
+          "description": "Processing pipeline name"
+        },
+        "agent_type": {
+          "type": "string",
+          "maxLength": 100,
+          "description": "Type of GOX agent that generated the log"
+        },
+        "severity": {
+          "type": "string",
+          "enum": ["low", "medium", "high", "critical"],
+          "description": "Severity level beyond standard log levels"
+        },
+        "category": {
+          "type": "string",
+          "enum": ["security", "performance", "error", "audit", "business", "system"],
+          "description": "Log category for classification"
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 50
+          },
+          "maxItems": 20,
+          "description": "Custom tags for log categorization"
+        }
+      }
+    },
+    "security_context": {
+      "type": "object",
+      "properties": {
+        "security_event": {
+          "type": "boolean",
+          "description": "Whether this log represents a security event"
+        },
+        "threat_level": {
+          "type": "string",
+          "enum": ["none", "low", "medium", "high", "critical"],
+          "description": "Assessed threat level"
+        },
+        "security_indicators": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "indicator_type": {
+                "type": "string",
+                "enum": ["authentication_failure", "privilege_escalation", "suspicious_activity", "malware_detected", "data_breach"]
+              },
+              "confidence": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              "description": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "compliance_flags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Compliance frameworks this log is relevant to (GDPR, HIPAA, SOX, etc.)"
+        }
+      }
+    },
+    "search_optimization": {
+      "type": "object",
+      "properties": {
+        "boost_factor": {
+          "type": "number",
+          "minimum": 0.1,
+          "maximum": 10.0,
+          "default": 1.0,
+          "description": "Search relevance boost factor"
+        },
+        "exclude_from_search": {
+          "type": "boolean",
+          "default": false,
+          "description": "Whether to exclude from search results"
+        },
+        "time_weight": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Weight factor based on log entry age"
+        },
+        "searchable_fields": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Fields that should be included in search"
+        },
+        "facet_fields": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Fields to use for faceted search"
+        },
+        "aggregate_fields": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Fields suitable for aggregation queries"
+        }
+      }
+    },
+    "retention_policy": {
+      "type": "object",
+      "properties": {
+        "retention_period": {
+          "type": "string",
+          "pattern": "^\\d+[dwmy]$",
+          "description": "Retention period (e.g., '30d', '12w', '6m', '1y')"
+        },
+        "archive_after": {
+          "type": "string",
+          "pattern": "^\\d+[dwmy]$",
+          "description": "Archive logs after this period"
+        },
+        "delete_after": {
+          "type": "string",
+          "pattern": "^\\d+[dwmy]$",
+          "description": "Permanently delete logs after this period"
+        },
+        "legal_hold": {
+          "type": "boolean",
+          "description": "Whether this log is under legal hold"
+        },
+        "compliance_requirements": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Compliance frameworks affecting retention"
+        }
+      }
+    },
+    "analysis_results": {
+      "type": "object",
+      "properties": {
+        "anomaly_score": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Calculated anomaly score for this log entry"
+        },
+        "sentiment": {
+          "type": "string",
+          "enum": ["positive", "neutral", "negative"],
+          "description": "Sentiment analysis result if applicable"
+        },
+        "language": {
+          "type": "string",
+          "pattern": "^[a-z]{2}(-[A-Z]{2})?$",
+          "description": "Detected language of the log message"
+        },
+        "patterns_matched": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "pattern_name": {
+                "type": "string"
+              },
+              "pattern_type": {
+                "type": "string",
+                "enum": ["error", "warning", "security", "performance", "business"]
+              },
+              "confidence": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              }
+            }
+          }
+        },
+        "ml_classifications": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "classifier": {
+                "type": "string"
+              },
+              "classification": {
+                "type": "string"
+              },
+              "confidence": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              }
+            }
+          }
+        }
+      }
+    },
+    "relationships": {
+      "type": "object",
+      "properties": {
+        "related_logs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "log_id": {
+                "type": "string"
+              },
+              "relationship_type": {
+                "type": "string",
+                "enum": ["cause", "effect", "sequence", "correlation"]
+              },
+              "confidence": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              }
+            }
+          }
+        },
+        "event_sequence": {
+          "type": "object",
+          "properties": {
+            "sequence_id": {
+              "type": "string"
+            },
+            "position": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "total_events": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        }
+      }
+    }
+  },
+  "required": ["index_metadata", "log_entry"]
+}

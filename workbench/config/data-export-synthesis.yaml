@@ -1,0 +1,45 @@
+# Data Export Synthesis Cell
+cell:
+  id: "synthesis:data-export"
+  description: "Structured data export pipeline for analytics and integration"
+  debug: true
+
+  orchestration:
+    startup_timeout: "30s"
+    shutdown_timeout: "20s"
+    max_retries: 2
+    health_check_interval: "15s"
+    execution_order: ["metadata-agent", "dataset-agent"]
+
+  agents:
+    - id: "metadata-agent"
+      agent_type: "metadata-collector"
+      dependencies: []
+      ingress:
+        channels: ["synthesis_request"]
+      egress:
+        channels: ["metadata_collected"]
+      config:
+        include_chunk_metadata: true
+        include_file_metadata: true
+        generate_schema: true
+        output_format: "json"
+
+    - id: "dataset-agent"
+      agent_type: "dataset-builder"
+      dependencies: []
+      ingress:
+        channels: ["synthesis_request"]
+      egress:
+        channels: ["dataset_exported"]
+      config:
+        output_format: "json"
+        include_metadata: true
+        generate_schema: true
+        enable_validation: true
+        naming_scheme: "export_XXXX"
+        max_records: 500000  # Larger for data export
+
+  environment:
+    GOX_LOG_LEVEL: "info"
+    GOX_EXPORT_MODE: "structured"

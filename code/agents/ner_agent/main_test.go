@@ -47,7 +47,17 @@ func TestEntityTypeNormalization(t *testing.T) {
 }
 
 func TestModelFiles(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping model file test in short mode (requires external model files)")
+	}
+
 	modelDir := "../../models/ner"
+
+	// Skip if model directory doesn't exist (external files not in repo)
+	if _, err := os.Stat(modelDir); os.IsNotExist(err) {
+		t.Skip("Skipping model file test: model directory not found (external files)")
+		return
+	}
 
 	// Check required files
 	requiredFiles := []string{

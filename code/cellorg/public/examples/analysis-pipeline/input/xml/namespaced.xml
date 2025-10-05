@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gox:pipeline xmlns:gox="http://gox-framework.org/schema/v1"
+              xmlns:agents="http://gox-framework.org/agents/v1"
+              xmlns:config="http://gox-framework.org/config/v1"
+              xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+              xsi:schemaLocation="http://gox-framework.org/schema/v1 pipeline.xsd">
+
+    <gox:metadata>
+        <gox:id>analysis-pipeline-example</gox:id>
+        <gox:version>2.1.0</gox:version>
+        <gox:description>Namespaced XML example with complex structure</gox:description>
+        <gox:created>2024-09-27T10:00:00Z</gox:created>
+        <gox:author>GOX Framework Team</gox:author>
+    </gox:metadata>
+
+    <gox:cell id="analysis-cell">
+        <gox:description>Multi-format file analysis cell</gox:description>
+
+        <agents:agent-pool>
+            <agents:agent id="binary-analyzer-001" type="binary_analyzer">
+                <config:configuration>
+                    <config:deep_scan enabled="true"/>
+                    <config:string_extraction min_length="4" max_results="1000"/>
+                    <config:security_analysis>
+                        <config:entropy_threshold>6.5</config:entropy_threshold>
+                        <config:detect_packing>true</config:detect_packing>
+                        <config:scan_imports>true</config:scan_imports>
+                    </config:security_analysis>
+                </config:configuration>
+                <agents:ingress>file:input/binary/*</agents:ingress>
+                <agents:egress>pub:binary-results</agents:egress>
+            </agents:agent>
+
+            <agents:agent id="json-analyzer-001" type="json_analyzer">
+                <config:configuration>
+                    <config:validation>
+                        <config:syntax>true</config:syntax>
+                        <config:schema>true</config:schema>
+                        <config:schema_path>schemas/</config:schema_path>
+                    </config:validation>
+                    <config:analysis>
+                        <config:extract_paths>true</config:extract_paths>
+                        <config:max_depth>10</config:max_depth>
+                        <config:pretty_print>true</config:pretty_print>
+                    </config:analysis>
+                </config:configuration>
+                <agents:ingress>file:input/json/*</agents:ingress>
+                <agents:egress>pub:json-results</agents:egress>
+            </agents:agent>
+
+            <agents:agent id="xml-analyzer-001" type="xml_analyzer">
+                <config:configuration>
+                    <config:validation>
+                        <config:wellformed>true</config:wellformed>
+                        <config:schema_validation>true</config:schema_validation>
+                        <config:namespace_aware>true</config:namespace_aware>
+                    </config:validation>
+                    <config:extraction>
+                        <config:elements>true</config:elements>
+                        <config:attributes>true</config:attributes>
+                        <config:text_content>true</config:text_content>
+                        <config:preserve_whitespace>false</config:preserve_whitespace>
+                    </config:extraction>
+                </config:configuration>
+                <agents:ingress>file:input/xml/*</agents:ingress>
+                <agents:egress>pub:xml-results</agents:egress>
+            </agents:agent>
+        </agents:agent-pool>
+
+        <gox:routing>
+            <gox:route from="input/*" to="analysis-router"/>
+            <gox:route from="analysis-router" to="format-specific-analyzer"/>
+            <gox:route from="*-results" to="results-aggregator"/>
+        </gox:routing>
+
+        <gox:monitoring>
+            <gox:metrics enabled="true">
+                <gox:throughput unit="files/second"/>
+                <gox:latency unit="milliseconds"/>
+                <gox:error_rate unit="percentage"/>
+            </gox:metrics>
+            <gox:alerts>
+                <gox:alert type="high_error_rate" threshold="5.0"/>
+                <gox:alert type="low_throughput" threshold="10.0"/>
+                <gox:alert type="processing_timeout" threshold="30s"/>
+            </gox:alerts>
+        </gox:monitoring>
+    </gox:cell>
+
+    <gox:pipeline-config>
+        <config:parallel_processing enabled="true" max_workers="4"/>
+        <config:error_handling strategy="continue" max_retries="3"/>
+        <config:output_format>structured_json</config:output_format>
+        <config:compression enabled="false"/>
+        <config:encryption enabled="false"/>
+    </gox:pipeline-config>
+
+</gox:pipeline>

@@ -1,0 +1,18 @@
+This is a sample file for the storage controller demo.
+
+It demonstrates how files are processed by the cell while storage operations
+are handled by the external storage controller service.
+
+Key features:
+- File ingestion and processing
+- Storage integration via HTTP API
+- Proper separation of concerns
+- Controller pattern implementation
+
+The storage controller runs independently and provides:
+- Key-value storage
+- Graph database operations
+- File storage capabilities
+- Full-text search functionality
+
+This architectural pattern ensures scalability, reusability, and maintainability.

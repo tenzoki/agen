@@ -1,0 +1,23 @@
+{
+  "enable_ocr": true,
+  "ocr_mode": "http",
+  "ocr_service_url": "http://localhost:8000/ocr",
+  "timeout": 120000000000,
+  "worker_pool_size": 8,
+  "max_concurrent_jobs": 20,
+  "batch_size": 100,
+  "ocr_config": {
+    "languages": ["eng", "deu", "fra", "spa", "ita"],
+    "psm": 3,
+    "oem": 3,
+    "enable_preprocessing": true,
+    "preprocessing_config": {
+      "enable_deskew": true,
+      "enable_noise_removal": true,
+      "contrast_enhancement": true,
+      "resolution_upscaling": true,
+      "auto_rotation": true,
+      "border_removal": true
+    }
+  }
+}

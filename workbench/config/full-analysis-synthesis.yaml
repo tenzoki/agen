@@ -1,0 +1,82 @@
+# Full Synthesis Analysis Cell
+cell:
+  id: "synthesis:full-analysis"
+  description: "Comprehensive synthesis pipeline with all available analyzers"
+  debug: true
+
+  orchestration:
+    startup_timeout: "45s"
+    shutdown_timeout: "30s"
+    max_retries: 3
+    health_check_interval: "20s"
+    execution_order: ["summary-agent", "indexer-agent", "metadata-agent", "report-agent", "dataset-agent"]
+
+  agents:
+    - id: "summary-agent"
+      agent_type: "summary-generator"
+      dependencies: []
+      ingress:
+        channels: ["synthesis_request"]
+      egress:
+        channels: ["summary_complete"]
+      config:
+        max_keywords: 30
+        max_topics: 15
+        summary_length: 1000
+        enable_sections: true
+
+    - id: "indexer-agent"
+      agent_type: "search-indexer"
+      dependencies: []
+      ingress:
+        channels: ["synthesis_request"]
+      egress:
+        channels: ["index_complete"]
+      config:
+        max_terms: 15000
+        min_term_frequency: 2
+        calculate_positions: true
+        score_threshold: 0.05
+
+    - id: "metadata-agent"
+      agent_type: "metadata-collector"
+      dependencies: []
+      ingress:
+        channels: ["synthesis_request"]
+      egress:
+        channels: ["metadata_complete"]
+      config:
+        include_chunk_metadata: true
+        include_file_metadata: true
+        generate_schema: true
+        max_metadata_size: 20971520  # 20MB
+
+    - id: "report-agent"
+      agent_type: "report-generator"
+      dependencies: []
+      ingress:
+        channels: ["synthesis_request"]
+      egress:
+        channels: ["report_complete"]
+      config:
+        include_charts: true
+        include_tables: true
+        include_recommendations: true
+        max_recommendations: 8
+
+    - id: "dataset-agent"
+      agent_type: "dataset-builder"
+      dependencies: []
+      ingress:
+        channels: ["synthesis_request"]
+      egress:
+        channels: ["dataset_complete"]
+      config:
+        include_metadata: true
+        generate_schema: true
+        enable_validation: true
+        max_records: 250000
+
+  environment:
+    GOX_LOG_LEVEL: "info"
+    GOX_PARALLEL_PROCESSING: "true"

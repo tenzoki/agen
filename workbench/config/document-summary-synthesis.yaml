@@ -1,0 +1,30 @@
+# Document Summary Synthesis Cell
+cell:
+  id: "synthesis:document-summary"
+  description: "Document summarization pipeline using Framework-compliant agents"
+  debug: true
+
+  orchestration:
+    startup_timeout: "30s"
+    shutdown_timeout: "15s"
+    max_retries: 2
+    health_check_interval: "15s"
+    execution_order: ["summary-agent"]
+
+  agents:
+    - id: "summary-agent"
+      agent_type: "summary-generator"
+      dependencies: []
+      ingress:
+        channels: ["synthesis_request"]
+      egress:
+        channels: ["synthesis_result"]
+      config:
+        max_keywords: 25
+        max_topics: 12
+        summary_length: 750
+        output_format: "json"
+        enable_sections: true
+
+  environment:
+    GOX_LOG_LEVEL: "info"

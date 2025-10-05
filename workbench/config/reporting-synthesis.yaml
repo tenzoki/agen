@@ -1,0 +1,43 @@
+# Report Generation Cell
+cell:
+  id: "synthesis:reporting"
+  description: "Comprehensive reporting pipeline for business intelligence"
+  debug: true
+
+  orchestration:
+    startup_timeout: "30s"
+    shutdown_timeout: "20s"
+    max_retries: 2
+    health_check_interval: "15s"
+    execution_order: ["metadata-agent", "report-agent"]
+
+  agents:
+    - id: "metadata-agent"
+      agent_type: "metadata-collector"
+      dependencies: []
+      ingress:
+        channels: ["synthesis_request"]
+      egress:
+        channels: ["metadata_for_reporting"]
+      config:
+        include_chunk_metadata: true
+        include_file_metadata: true
+        generate_schema: false  # Skip schema for reporting
+
+    - id: "report-agent"
+      agent_type: "report-generator"
+      dependencies: []
+      ingress:
+        channels: ["synthesis_request"]
+      egress:
+        channels: ["report_generated"]
+      config:
+        include_charts: true
+        include_tables: true
+        include_recommendations: true
+        report_format: "json"
+        max_recommendations: 10
+
+  environment:
+    GOX_LOG_LEVEL: "info"
+    GOX_REPORTING_MODE: "comprehensive"

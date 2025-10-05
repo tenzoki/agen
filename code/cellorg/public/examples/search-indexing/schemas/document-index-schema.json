@@ -1,0 +1,473 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Document Index Schema",
+  "description": "Schema for document indexing in search systems",
+  "type": "object",
+  "properties": {
+    "document_metadata": {
+      "type": "object",
+      "properties": {
+        "index_id": {
+          "type": "string",
+          "description": "Unique identifier for the indexed document"
+        },
+        "indexed_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp when document was indexed"
+        },
+        "indexer_version": {
+          "type": "string",
+          "description": "Version of the search indexer"
+        },
+        "index_name": {
+          "type": "string",
+          "description": "Name of the target index"
+        },
+        "document_source": {
+          "type": "string",
+          "description": "Original source of the document"
+        },
+        "content_hash": {
+          "type": "string",
+          "description": "Hash of the document content for deduplication"
+        },
+        "index_size": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Size of the indexed content in bytes"
+        }
+      },
+      "required": ["index_id", "indexed_at", "index_name"]
+    },
+    "document_content": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Document identifier"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500,
+          "description": "Document title"
+        },
+        "content": {
+          "type": "string",
+          "description": "Full text content of the document"
+        },
+        "abstract": {
+          "type": "string",
+          "maxLength": 2000,
+          "description": "Document abstract or summary"
+        },
+        "keywords": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "maxItems": 50,
+          "description": "Document keywords for search optimization"
+        },
+        "language": {
+          "type": "string",
+          "pattern": "^[a-z]{2}(-[A-Z]{2})?$",
+          "description": "Language code (ISO 639-1 format)"
+        },
+        "content_type": {
+          "type": "string",
+          "enum": ["text", "html", "markdown", "pdf", "doc", "rtf", "xml"],
+          "description": "Type of content format"
+        }
+      },
+      "required": ["id", "title", "content"]
+    },
+    "document_metadata_fields": {
+      "type": "object",
+      "properties": {
+        "author": {
+          "type": "string",
+          "maxLength": 200,
+          "description": "Document author"
+        },
+        "created_date": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Document creation date"
+        },
+        "modified_date": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Document last modification date"
+        },
+        "published_date": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Document publication date"
+        },
+        "file_type": {
+          "type": "string",
+          "description": "Type of document file"
+        },
+        "file_size": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Size of the original file in bytes"
+        },
+        "file_path": {
+          "type": "string",
+          "description": "Path to the original file"
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 50
+          },
+          "maxItems": 20,
+          "description": "Document tags for categorization"
+        },
+        "category": {
+          "type": "string",
+          "maxLength": 100,
+          "description": "Document category"
+        },
+        "department": {
+          "type": "string",
+          "maxLength": 100,
+          "description": "Department or division associated with document"
+        },
+        "project": {
+          "type": "string",
+          "maxLength": 100,
+          "description": "Project associated with document"
+        },
+        "version": {
+          "type": "string",
+          "pattern": "^\\d+\\.\\d+(\\.\\d+)?$",
+          "description": "Document version"
+        },
+        "classification": {
+          "type": "string",
+          "enum": ["public", "internal", "confidential", "restricted"],
+          "description": "Security classification level"
+        }
+      }
+    },
+    "extracted_entities": {
+      "type": "object",
+      "properties": {
+        "organizations": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Organizations mentioned in the document"
+        },
+        "persons": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "People mentioned in the document"
+        },
+        "locations": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Locations mentioned in the document"
+        },
+        "technologies": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Technologies or tools mentioned"
+        },
+        "concepts": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Key concepts or topics"
+        },
+        "dates": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "date": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "context": {
+                "type": "string"
+              }
+            }
+          },
+          "description": "Important dates mentioned in document"
+        },
+        "urls": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uri"
+          },
+          "description": "URLs referenced in the document"
+        },
+        "email_addresses": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "email"
+          },
+          "description": "Email addresses found in document"
+        }
+      }
+    },
+    "search_optimization": {
+      "type": "object",
+      "properties": {
+        "boost_factor": {
+          "type": "number",
+          "minimum": 0.1,
+          "maximum": 10.0,
+          "default": 1.0,
+          "description": "Search relevance boost factor"
+        },
+        "exclude_from_search": {
+          "type": "boolean",
+          "default": false,
+          "description": "Whether to exclude from search results"
+        },
+        "searchable_fields": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Fields that should be included in search"
+        },
+        "facet_fields": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Fields to use for faceted search"
+        },
+        "suggest_fields": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Fields to use for auto-completion suggestions"
+        },
+        "highlight_fields": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Fields to highlight in search results"
+        },
+        "custom_analyzers": {
+          "type": "object",
+          "patternProperties": {
+            "^[a-zA-Z0-9_]+$": {
+              "type": "object",
+              "properties": {
+                "tokenizer": {
+                  "type": "string"
+                },
+                "filters": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "description": "Custom text analyzers for specific fields"
+        }
+      }
+    },
+    "access_control": {
+      "type": "object",
+      "properties": {
+        "read_permissions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Users or groups with read access"
+        },
+        "access_level": {
+          "type": "string",
+          "enum": ["public", "authenticated", "restricted", "private"],
+          "description": "Document access level"
+        },
+        "department_restrictions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Departments allowed to access document"
+        },
+        "security_labels": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Security labels for fine-grained access control"
+        }
+      }
+    },
+    "quality_metrics": {
+      "type": "object",
+      "properties": {
+        "content_quality": {
+          "type": "object",
+          "properties": {
+            "readability_score": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100,
+              "description": "Readability score of the document"
+            },
+            "completeness": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100,
+              "description": "Completeness score based on expected content"
+            },
+            "accuracy": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100,
+              "description": "Accuracy score if verifiable information exists"
+            },
+            "freshness": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100,
+              "description": "How recent/current the content is"
+            }
+          }
+        },
+        "indexing_quality": {
+          "type": "object",
+          "properties": {
+            "extraction_success": {
+              "type": "boolean",
+              "description": "Whether content extraction was successful"
+            },
+            "parsing_errors": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Number of parsing errors encountered"
+            },
+            "missing_metadata": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "List of expected metadata fields that are missing"
+            },
+            "indexing_duration": {
+              "type": "number",
+              "minimum": 0,
+              "description": "Time taken to index the document in milliseconds"
+            }
+          }
+        }
+      }
+    },
+    "usage_statistics": {
+      "type": "object",
+      "properties": {
+        "view_count": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of times document has been viewed"
+        },
+        "search_hits": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of times document appeared in search results"
+        },
+        "last_accessed": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Last time the document was accessed"
+        },
+        "download_count": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of times document has been downloaded"
+        },
+        "popularity_score": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Calculated popularity score based on usage metrics"
+        }
+      }
+    },
+    "relationships": {
+      "type": "object",
+      "properties": {
+        "related_documents": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "document_id": {
+                "type": "string"
+              },
+              "relationship_type": {
+                "type": "string",
+                "enum": ["similar", "referenced", "superseded", "parent", "child"]
+              },
+              "confidence": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              }
+            },
+            "required": ["document_id", "relationship_type"]
+          },
+          "description": "Documents related to this one"
+        },
+        "citations": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "cited_document": {
+                "type": "string"
+              },
+              "citation_context": {
+                "type": "string"
+              },
+              "page_reference": {
+                "type": "string"
+              }
+            }
+          },
+          "description": "Documents cited by this document"
+        },
+        "referenced_by": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Documents that reference this document"
+        }
+      }
+    }
+  },
+  "required": ["document_metadata", "document_content"]
+}

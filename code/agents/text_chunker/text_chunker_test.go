@@ -3,9 +3,9 @@ package main
 import (
 	"testing"
 
-	"github.com/agen/cellorg/internal/agent"
-	"github.com/agen/cellorg/internal/client"
-	"github.com/tenzoki/gox/test/testutil"
+	"github.com/tenzoki/agen/cellorg/public/agent"
+	"github.com/tenzoki/agen/cellorg/public/client"
+	"github.com/tenzoki/agen/agents/testutil"
 )
 
 // MockTextChunkerRunner implements agent.AgentRunner for testing

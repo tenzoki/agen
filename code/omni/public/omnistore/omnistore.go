@@ -4,12 +4,12 @@ import (
 	"context"
 	"time"
 
-	"github.com/agen/omni/internal/common"
-	"github.com/agen/omni/internal/graph"
-	"github.com/agen/omni/internal/kv"
-	"github.com/agen/omni/internal/query"
-	"github.com/agen/omni/internal/transaction"
-	"github.com/agen/omni/internal/filestore"
+	"github.com/tenzoki/agen/omni/internal/common"
+	"github.com/tenzoki/agen/omni/internal/graph"
+	"github.com/tenzoki/agen/omni/internal/kv"
+	"github.com/tenzoki/agen/omni/internal/query"
+	"github.com/tenzoki/agen/omni/internal/transaction"
+	"github.com/tenzoki/agen/omni/internal/filestore"
 )
 
 // OmniStore provides a unified interface for KV, Graph, Files, and Search operations

@@ -1,3 +1,5 @@
+//go:build ignore
+
 package main
 
 import (
@@ -8,10 +10,10 @@ import (
 	"sort"
 	"time"
 
-	"github.com/godast/godast/internal/common"
-	"github.com/godast/godast/internal/graph"
-	"github.com/godast/godast/internal/kv"
-	"github.com/godast/godast/internal/storage"
+	"github.com/tenzoki/agen/omni/internal/common"
+	"github.com/tenzoki/agen/omni/internal/graph"
+	"github.com/tenzoki/agen/omni/internal/kv"
+	"github.com/tenzoki/agen/omni/internal/storage"
 )
 
 type UserProfile struct {

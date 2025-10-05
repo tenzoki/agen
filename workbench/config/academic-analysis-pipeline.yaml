@@ -1,0 +1,77 @@
+# Academic Document Analysis Pipeline
+cell:
+  id: "pipeline:academic-analysis"
+  description: "Specialized pipeline for academic document analysis and research paper processing"
+  debug: true
+
+  orchestration:
+    startup_timeout: "60s"
+    shutdown_timeout: "25s"
+    max_retries: 2
+    retry_delay: "10s"
+    health_check_interval: "30s"
+
+  agents:
+    - id: "file-ingester-academic-001"
+      agent_type: "file-ingester"
+      ingress: "file:examples/academic-pipeline/papers/*.pdf"
+      egress: "pub:research-papers"
+      dependencies: []
+      config:
+        digest: false
+        watch_interval_seconds: 10
+
+    - id: "text-extractor-academic-001"
+      agent_type: "text-extractor"
+      ingress: "sub:research-papers"
+      egress: "pub:paper-text"
+      dependencies: ["file-ingester-academic-001"]
+      config:
+        enable_ocr: true
+        ocr_languages: ["eng"]
+        quality_threshold: 0.85
+        timeout: "120s"
+
+    - id: "document-processor-academic-001"
+      agent_type: "document-processor"
+      ingress: "sub:paper-text"
+      egress: "pub:paper-sections"
+      dependencies: ["text-extractor-academic-001"]
+      config:
+        strategy: "academic_paper"
+        chunk_size: 1024
+        overlap_size: 128
+        preserve_structure: true
+        include_metadata: true
+
+    - id: "chunk-processor-academic-001"
+      agent_type: "chunk-processor"
+      ingress: "sub:paper-sections"
+      egress: "pub:analyzed-sections"
+      dependencies: ["document-processor-academic-001"]
+      config:
+        processor_type: "text_processor"
+        enable_keywords: true
+        enable_nlp: false
+        max_lines: 5000
+
+    - id: "chunk-synthesizer-academic-001"
+      agent_type: "chunk-synthesizer"
+      ingress: "sub:analyzed-sections"
+      egress: "pub:paper-summary"
+      dependencies: ["chunk-processor-academic-001"]
+      config:
+        synthesis_type: "document_summary"
+        max_keywords: 25
+        summary_length: 500
+        include_sections: true
+
+    - id: "file-writer-academic-001"
+      agent_type: "file-writer"
+      ingress: "sub:paper-summary"
+      egress: "file:examples/academic-pipeline/summaries/{{.paper_title}}_analysis_{{.timestamp}}.json"
+      dependencies: ["chunk-synthesizer-academic-001"]
+      config:
+        output_format: "json"
+        create_directories: true
+        preserve_metadata: true

@@ -1,0 +1,12 @@
+This is a sample text document for testing the GOX framework text extraction capabilities.
+
+It contains multiple paragraphs with different types of content to test various text processing scenarios.
+
+Features to test:
+- Basic text extraction
+- Multi-line content processing
+- Special characters: áéíóú, ñ, ç, ß, ü
+- Numbers: 123, 4.56, 7.89
+- Mixed content formatting
+
+This document serves as a baseline for text extraction testing across different operators and agents in the GOX framework.

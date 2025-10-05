@@ -1,0 +1,26 @@
+# Production HTTP OCR with load-balanced service
+cell:
+  id: "extraction:http-ocr-production"
+  description: "Production text extraction using load-balanced containerized OCR service"
+  debug: false
+
+  orchestration:
+    startup_timeout: "90s"
+    shutdown_timeout: "30s"
+    max_retries: 5
+    retry_delay: "20s"
+    health_check_interval: "60s"
+
+  agents:
+    - id: "ocr-http-stub-prod-001"
+      agent_type: "ocr-http-stub"
+      ingress: "sub:production-ocr-extraction"
+      egress: "pub:extracted-text-production"
+      dependencies: []
+      config:
+        service_url: "http://localhost:8000/ocr" # Load-balanced service
+        request_timeout: 600000000000  # 10 minutes for large documents
+        max_retries: 5
+        retry_delay: 10000000000       # 10 seconds
+        health_check_url: "http://localhost:8000/health"
+        supported_formats: ".png,.jpg,.jpeg,.tiff,.bmp,.pdf"

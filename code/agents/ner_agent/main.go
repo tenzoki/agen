@@ -12,8 +12,8 @@ import (
 	"github.com/daulet/tokenizers"
 	ort "github.com/yalue/onnxruntime_go"
 
-	"github.com/agen/cellorg/internal/agent"
-	"github.com/agen/cellorg/internal/client"
+	"github.com/tenzoki/agen/cellorg/public/agent"
+	"github.com/tenzoki/agen/cellorg/public/client"
 )
 
 // NERAgent performs Named Entity Recognition using ONNXRuntime

@@ -1,0 +1,9 @@
+agent_id	agent_type	documents_processed	avg_processing_time	success_rate	last_active
+text-analyzer-001	text-analyzer	1523	2.3	98.7	2024-09-26T10:30:00Z
+json-analyzer-001	json-analyzer	642	1.8	99.2	2024-09-26T10:29:45Z
+xml-analyzer-001	xml-analyzer	384	3.1	97.4	2024-09-26T10:28:30Z
+binary-analyzer-001	binary-analyzer	156	4.7	95.8	2024-09-26T10:27:15Z
+file-ingester-001	file-ingester	2705	0.8	99.8	2024-09-26T10:31:00Z
+file-writer-001	file-writer	2680	1.2	99.5	2024-09-26T10:30:45Z
+text-extractor-001	text-extractor	892	5.4	96.3	2024-09-26T10:29:20Z
+ocr-processor-001	ocr-processor	234	12.7	94.1	2024-09-26T10:26:10Z

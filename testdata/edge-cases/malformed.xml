@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<malformed_xml_test>
+  <description>This XML file contains intentional syntax errors for testing error handling</description>
+
+  <!-- Missing closing tag -->
+  <valid_element>This element is properly formed</valid_element>
+  <unclosed_element>This element is missing its closing tag
+
+  <!-- Malformed attributes -->
+  <bad_attributes attr1="value1" attr2=missing_quotes attr3="unclosed>
+    Content with malformed parent
+  </bad_attributes>
+
+  <!-- Nested structure with errors -->
+  <parent>
+    <child>Valid child content</child>
+    <another_child>
+      <grandchild>Content here
+      <!-- Missing closing tags for grandchild and another_child -->
+  </parent>
+
+  <!-- Reserved characters not properly escaped -->
+  <unescaped_content>
+    This content contains unescaped characters: < > & "quotes" 'apostrophes'
+  </unescaped_content>
+
+  <!-- Duplicate attributes -->
+  <duplicate_attrs name="first" name="second">
+    This element has duplicate attributes
+  </duplicate_attrs>
+
+  <!-- Invalid character in element name -->
+  <invalid-element@name>
+    Element names cannot contain @ symbols
+  </invalid-element@name>
+
+  <!-- Unclosed CDATA section -->
+  <cdata_test>
+    <![CDATA[
+    This CDATA section is not properly closed
+  </cdata_test>
+
+<!-- Missing root element closing tag -->

@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/agen/cellorg/internal/config"
+	"github.com/tenzoki/agen/cellorg/internal/config"
 )
 
 // AgentDeployer manages agent deployment with different strategies

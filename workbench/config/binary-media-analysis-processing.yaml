@@ -1,0 +1,41 @@
+# Specialized binary/image analysis cell
+cell:
+  id: "processing:binary-media-analysis"
+  description: "Specialized analysis for binary data and media files"
+  debug: true
+
+  orchestration:
+    startup_timeout: "60s"
+    shutdown_timeout: "30s"
+    max_retries: 2
+    retry_delay: "20s"
+    health_check_interval: "45s"
+
+  agents:
+    # Comprehensive binary analysis
+    - id: "binary-analyzer-comprehensive-001"
+      agent_type: "binary-analyzer"
+      ingress: "sub:binary-media-binary"
+      egress: "pub:comprehensive-analyzed-binary"
+      dependencies: []
+      config:
+        enable_hashing: true
+        enable_entropy: true
+        enable_magic_bytes: true
+        max_analysis_size: 52428800  # 50MB
+        enable_structural: true
+        enable_compression: true
+
+    # Comprehensive image analysis
+    - id: "image-analyzer-comprehensive-001"
+      agent_type: "image-analyzer"
+      ingress: "sub:binary-media-image"
+      egress: "pub:comprehensive-analyzed-image"
+      dependencies: []
+      config:
+        enable_metadata: true
+        enable_dimensions: true
+        enable_color_analysis: true
+        max_analysis_size: 52428800  # 50MB
+        enable_thumbnail: true
+        enable_quality: true

@@ -1,0 +1,177 @@
+cell:
+  id: "cell:comprehensive-text-processing"
+  description: "Comprehensive text processing cell for testing all agent types"
+
+  orchestration:
+    startup_timeout: "60s"
+    shutdown_timeout: "30s"
+    max_retries: 3
+    health_check_interval: "15s"
+
+  agents:
+    # File Ingestion Stage
+    - id: "file-ingester-001"
+      agent_type: "file-ingester"
+      dependencies: []
+      ingress: "file:test/data/documents/*.{txt,pdf,json,xml,csv}"
+      egress: "pub:raw-files"
+      config:
+        digest: true
+        watch_interval: "10s"
+        include_metadata: true
+        batch_size: 20
+
+    # Text Extraction (for PDF/image files)
+    - id: "text-extractor-001"
+      agent_type: "text-extractor"
+      dependencies: ["file-ingester-001"]
+      ingress: "sub:raw-files"
+      egress: "pub:extracted-text"
+      config:
+        ocr_enabled: true
+        languages: ["eng", "deu", "fra"]
+        confidence_threshold: 0.8
+
+    # Parallel Analysis Stage
+    - id: "text-analyzer-001"
+      agent_type: "text-analyzer"
+      dependencies: ["text-extractor-001"]
+      ingress: "sub:extracted-text"
+      egress: "pub:text-analysis"
+      config:
+        sentiment_analysis: true
+        keyword_extraction: true
+        language_detection: true
+        min_text_length: 10
+
+    - id: "json-analyzer-001"
+      agent_type: "json-analyzer"
+      dependencies: ["file-ingester-001"]
+      ingress: "sub:raw-files"
+      egress: "pub:json-analysis"
+      config:
+        validate_schema: true
+        extract_metadata: true
+        pretty_print: false
+
+    - id: "xml-analyzer-001"
+      agent_type: "xml-analyzer"
+      dependencies: ["file-ingester-001"]
+      ingress: "sub:raw-files"
+      egress: "pub:xml-analysis"
+      config:
+        validate_dtd: false
+        namespace_aware: true
+        extract_xpath: ["//*[@id]", "//text()"]
+
+    - id: "binary-analyzer-001"
+      agent_type: "binary-analyzer"
+      dependencies: ["file-ingester-001"]
+      ingress: "sub:raw-files"
+      egress: "pub:binary-analysis"
+      config:
+        deep_scan: true
+        extract_strings: true
+        max_file_size: "50MB"
+
+    # Content Processing Stage
+    - id: "summary-generator-001"
+      agent_type: "summary-generator"
+      dependencies: ["text-analyzer-001"]
+      ingress: "sub:text-analysis"
+      egress: "pub:summaries"
+      config:
+        max_summary_length: 500
+        include_keywords: true
+        sentiment_aware: true
+
+    # Output Stage
+    - id: "file-writer-001"
+      agent_type: "file-writer"
+      dependencies: ["summary-generator-001", "json-analyzer-001", "xml-analyzer-001", "binary-analyzer-001"]
+      ingress: "sub:summaries,sub:json-analysis,sub:xml-analysis,sub:binary-analysis"
+      egress: "file:test/data/output/{{.agent_id}}_{{.timestamp}}.json"
+      config:
+        create_directories: true
+        include_metadata: true
+        format: "json"
+        pretty_print: true
+
+  # Message routing configuration
+  messaging:
+    topics:
+      - name: "raw-files"
+        description: "Raw file content from ingester"
+        retention: "2h"
+        max_size: "1GB"
+
+      - name: "extracted-text"
+        description: "Extracted text content"
+        retention: "4h"
+        max_size: "500MB"
+
+      - name: "text-analysis"
+        description: "Text analysis results"
+        retention: "6h"
+        max_size: "200MB"
+
+      - name: "json-analysis"
+        description: "JSON analysis results"
+        retention: "6h"
+        max_size: "100MB"
+
+      - name: "xml-analysis"
+        description: "XML analysis results"
+        retention: "6h"
+        max_size: "100MB"
+
+      - name: "binary-analysis"
+        description: "Binary analysis results"
+        retention: "6h"
+        max_size: "50MB"
+
+      - name: "summaries"
+        description: "Generated content summaries"
+        retention: "12h"
+        max_size: "50MB"
+
+  # Monitoring configuration
+  monitoring:
+    metrics:
+      - name: "files_processed_total"
+        type: "counter"
+        description: "Total files processed"
+        labels: ["agent_id", "file_type", "status"]
+
+      - name: "processing_duration_seconds"
+        type: "histogram"
+        description: "File processing duration"
+        labels: ["agent_id", "processing_stage"]
+
+      - name: "analysis_confidence_score"
+        type: "gauge"
+        description: "Analysis confidence scores"
+        labels: ["agent_id", "analysis_type"]
+
+    health_checks:
+      - agent_id: "file-ingester-001"
+        endpoint: "/health"
+        interval: "30s"
+        timeout: "5s"
+
+      - agent_id: "text-extractor-001"
+        endpoint: "/health"
+        interval: "30s"
+        timeout: "10s"
+
+      - agent_id: "text-analyzer-001"
+        endpoint: "/health"
+        interval: "20s"
+        timeout: "5s"
+
+  # Environment variables
+  environment:
+    GOX_LOG_LEVEL: "debug"
+    GOX_CELL_ID: "comprehensive-text-processing"
+    GOX_METRICS_ENABLED: "true"
+    GOX_TRACE_ENABLED: "true"

@@ -1,0 +1,22 @@
+{
+  "enable_ocr": true,
+  "ocr_mode": "native",
+  "timeout": 60000000000,
+  "worker_pool_size": 4,
+  "max_concurrent_jobs": 10,
+  "batch_size": 50,
+  "ocr_config": {
+    "languages": ["eng", "deu", "fra"],
+    "psm": 3,
+    "oem": 3,
+    "enable_preprocessing": true,
+    "preprocessing_config": {
+      "enable_deskew": true,
+      "enable_noise_removal": true,
+      "contrast_enhancement": true,
+      "resolution_upscaling": false,
+      "auto_rotation": true,
+      "border_removal": false
+    }
+  }
+}

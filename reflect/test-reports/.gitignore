@@ -1,0 +1,20 @@
+# Test Reports
+# Auto-generated test artifacts - keep structure, ignore content
+
+# Test reports (keep only latest-summary.txt and README.md)
+test-report-*.md
+!latest-summary.txt
+latest-report.md
+
+# Coverage reports
+coverage/
+*.out
+*.html
+
+# Log files
+*.log
+
+# Temporary test data
+temp_*
+tmp_*
+demo_*

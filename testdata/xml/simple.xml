@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gox_test_data>
+  <metadata>
+    <title>Simple XML Test Data</title>
+    <description>Basic XML structure for xml-analyzer agent testing</description>
+    <created>2024-09-26</created>
+    <version>1.0</version>
+  </metadata>
+
+  <documents>
+    <document id="doc-001" type="text">
+      <title>Sample Document 1</title>
+      <content>This is the content of the first test document.</content>
+      <tags>
+        <tag>test</tag>
+        <tag>sample</tag>
+        <tag>xml</tag>
+      </tags>
+      <metrics>
+        <word_count>10</word_count>
+        <character_count>52</character_count>
+      </metrics>
+    </document>
+
+    <document id="doc-002" type="report">
+      <title>Analysis Report</title>
+      <content>This document contains analysis results and findings.</content>
+      <tags>
+        <tag>analysis</tag>
+        <tag>report</tag>
+      </tags>
+      <metrics>
+        <word_count>8</word_count>
+        <character_count>48</character_count>
+      </metrics>
+    </document>
+  </documents>
+
+  <processing_info>
+    <agent_id>xml-analyzer-001</agent_id>
+    <timestamp>2024-09-26T10:30:00Z</timestamp>
+    <status>completed</status>
+  </processing_info>
+</gox_test_data>

@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE gox_pipeline_config SYSTEM "gox_config.dtd">
+<gox_pipeline_config xmlns:gox="http://gox.framework.com/ns"
+                     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                     xsi:schemaLocation="http://gox.framework.com/ns gox_schema.xsd">
+
+  <gox:header>
+    <gox:title>Complex XML Configuration</gox:title>
+    <gox:description><![CDATA[
+      Advanced XML test data with namespaces, CDATA sections,
+      attributes, and complex nested structures for comprehensive testing.
+    ]]></gox:description>
+    <gox:version major="2" minor="1" patch="0" build="20240926"/>
+    <gox:created_by user="test_suite" system="gox_framework"/>
+  </gox:header>
+
+  <gox:pipeline_definitions>
+    <gox:pipeline id="text_processing" priority="high" enabled="true">
+      <gox:description>Text processing and analysis pipeline</gox:description>
+
+      <gox:stages>
+        <gox:stage name="ingestion" order="1" timeout="PT30S">
+          <gox:agents>
+            <gox:agent type="file-ingester" instances="2">
+              <gox:config>
+                <gox:property name="input_path" value="/data/input" type="string"/>
+                <gox:property name="batch_size" value="50" type="integer"/>
+                <gox:property name="watch_mode" value="true" type="boolean"/>
+              </gox:config>
+            </gox:agent>
+            <gox:agent type="text-extractor" instances="1">
+              <gox:config>
+                <gox:property name="ocr_enabled" value="true" type="boolean"/>
+                <gox:property name="languages" value="eng,deu,fra" type="string"/>
+              </gox:config>
+            </gox:agent>
+          </gox:agents>
+        </gox:stage>
+
+        <gox:stage name="analysis" order="2" timeout="PT60S">
+          <gox:dependencies>
+            <gox:dependency stage="ingestion" type="completion"/>
+          </gox:dependencies>
+          <gox:agents>
+            <gox:agent type="text-analyzer" instances="3">
+              <gox:config>
+                <gox:property name="sentiment_analysis" value="true" type="boolean"/>
+                <gox:property name="keyword_extraction" value="true" type="boolean"/>
+                <gox:property name="language_detection" value="auto" type="string"/>
+              </gox:config>
+            </gox:agent>
+            <gox:agent type="json-analyzer" instances="1">
+              <gox:config>
+                <gox:property name="validate_schema" value="true" type="boolean"/>
+                <gox:property name="extract_metadata" value="true" type="boolean"/>
+              </gox:config>
+            </gox:agent>
+            <gox:agent type="xml-analyzer" instances="1">
+              <gox:config>
+                <gox:property name="validate_dtd" value="false" type="boolean"/>
+                <gox:property name="namespace_aware" value="true" type="boolean"/>
+              </gox:config>
+            </gox:agent>
+          </gox:agents>
+        </gox:stage>
+
+        <gox:stage name="output" order="3" timeout="PT15S">
+          <gox:dependencies>
+            <gox:dependency stage="analysis" type="completion"/>
+          </gox:dependencies>
+          <gox:agents>
+            <gox:agent type="file-writer" instances="1">
+              <gox:config>
+                <gox:property name="output_path" value="/data/output" type="string"/>
+                <gox:property name="format" value="json" type="string"/>
+                <gox:property name="compression" value="gzip" type="string"/>
+              </gox:config>
+            </gox:agent>
+          </gox:agents>
+        </gox:stage>
+      </gox:stages>
+
+      <gox:error_handling>
+        <gox:retry_policy max_attempts="3" backoff="exponential"/>
+        <gox:failure_handling strategy="skip_and_log"/>
+      </gox:error_handling>
+    </gox:pipeline>
+  </gox:pipeline_definitions>
+
+  <gox:monitoring>
+    <gox:metrics collection_interval="PT30S" retention="P7D">
+      <gox:metric name="documents_processed" type="counter"/>
+      <gox:metric name="processing_time" type="histogram"/>
+      <gox:metric name="error_rate" type="gauge"/>
+    </gox:metrics>
+
+    <gox:alerts>
+      <gox:alert name="high_error_rate" condition="error_rate > 0.05" severity="warning">
+        <gox:actions>
+          <gox:action type="email" target="admin@example.com"/>
+          <gox:action type="slack" target="#alerts"/>
+        </gox:actions>
+      </gox:alert>
+    </gox:alerts>
+  </gox:monitoring>
+
+  <gox:data_examples>
+    <gox:example type="mixed_content">
+      <gox:text_data>
+        This is plain text within XML: áéíóú, 中文, العربية, русский
+      </gox:text_data>
+      <gox:structured_data>
+        <item id="1" value="test" weight="1.5"/>
+        <item id="2" value="data" weight="2.7"/>
+      </gox:structured_data>
+      <gox:special_characters>
+        <![CDATA[
+          Special characters and symbols: < > & " '
+          JSON-like data: {"key": "value", "number": 42}
+          Code snippet: if (x > 0) { return x * 2; }
+        ]]>
+      </gox:special_characters>
+    </gox:example>
+  </gox:data_examples>
+
+</gox_pipeline_config>

@@ -1,0 +1,46 @@
+# Document Processing Pipeline with Intelligent Chunking
+cell:
+  id: "pipeline:document-processing"
+  description: "Intelligent document processing with strategy-based chunking"
+  debug: true
+
+  orchestration:
+    startup_timeout: "45s"
+    shutdown_timeout: "20s"
+    max_retries: 3
+    retry_delay: "5s"
+    health_check_interval: "15s"
+
+  agents:
+    - id: "file-ingester-docs-001"
+      agent_type: "file-ingester"
+      ingress: "file:examples/document-processing/input/*.{pdf,docx,txt}"
+      egress: "pub:raw-documents"
+      dependencies: []
+      config:
+        digest: false
+        watch_interval_seconds: 3
+
+    - id: "document-processor-001"
+      agent_type: "document-processor"
+      ingress: "sub:raw-documents"
+      egress: "pub:processed-chunks"
+      dependencies: ["file-ingester-docs-001"]
+      config:
+        strategy: "document_aware"
+        chunk_size: 2048
+        overlap_size: 256
+        enable_ocr: true
+        preserve_structure: true
+        batch_processing: true
+        workers: 4
+
+    - id: "file-writer-chunks-001"
+      agent_type: "file-writer"
+      ingress: "sub:processed-chunks"
+      egress: "file:examples/document-processing/output/{{.document_id}}/chunk_{{.chunk_index}}.txt"
+      dependencies: ["document-processor-001"]
+      config:
+        output_format: "txt"
+        create_directories: true
+        include_metadata: true

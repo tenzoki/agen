@@ -6,10 +6,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/agen/cellorg/internal/broker"
-	"github.com/agen/cellorg/internal/config"
-	"github.com/agen/cellorg/internal/deployer"
-	"github.com/agen/cellorg/internal/support"
+	"github.com/tenzoki/agen/cellorg/internal/broker"
+	"github.com/tenzoki/agen/cellorg/internal/config"
+	"github.com/tenzoki/agen/cellorg/internal/deployer"
+	"github.com/tenzoki/agen/cellorg/internal/support"
 )
 
 // EmbeddedOrchestrator runs Gox orchestrator in-process

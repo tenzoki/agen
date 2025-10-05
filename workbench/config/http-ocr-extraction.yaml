@@ -1,0 +1,26 @@
+# HTTP OCR text extraction with containerized service
+cell:
+  id: "extraction:http-ocr"
+  description: "Text extraction using containerized HTTP OCR service with await pattern"
+  debug: true
+
+  orchestration:
+    startup_timeout: "60s" # Longer timeout for service dependency
+    shutdown_timeout: "20s"
+    max_retries: 3
+    retry_delay: "15s"
+    health_check_interval: "45s"
+
+  agents:
+    - id: "ocr-http-stub-001"
+      agent_type: "ocr-http-stub"
+      ingress: "sub:http-ocr-extraction"
+      egress: "pub:extracted-text-http"
+      dependencies: []
+      config:
+        service_url: "http://localhost:8080/ocr"
+        request_timeout: 300000000000  # 5 minutes
+        max_retries: 3
+        retry_delay: 5000000000
+        health_check_url: "http://localhost:8080/health"
+        supported_formats: ".png,.jpg,.jpeg,.tiff,.bmp,.pdf"

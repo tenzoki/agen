@@ -1,0 +1,601 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Search Configuration Schema",
+  "description": "Schema for search indexer configuration",
+  "type": "object",
+  "properties": {
+    "indexer_config": {
+      "type": "object",
+      "properties": {
+        "index_name": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9_-]+$",
+          "minLength": 1,
+          "maxLength": 100,
+          "description": "Name of the search index"
+        },
+        "backend": {
+          "type": "string",
+          "enum": ["elasticsearch", "solr", "opensearch", "custom", "mock"],
+          "description": "Search backend to use"
+        },
+        "endpoint": {
+          "type": "string",
+          "format": "uri",
+          "description": "Backend endpoint URL"
+        },
+        "api_version": {
+          "type": "string",
+          "description": "API version to use with the backend"
+        },
+        "timeout": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 300,
+          "default": 30,
+          "description": "Request timeout in seconds"
+        },
+        "max_retries": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10,
+          "default": 3,
+          "description": "Maximum number of retry attempts"
+        }
+      },
+      "required": ["index_name", "backend"]
+    },
+    "authentication": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["none", "basic", "bearer_token", "api_key", "oauth2", "certificate"],
+          "description": "Authentication type"
+        },
+        "username": {
+          "type": "string",
+          "description": "Username for basic authentication"
+        },
+        "password": {
+          "type": "string",
+          "description": "Password for basic authentication"
+        },
+        "token": {
+          "type": "string",
+          "description": "Bearer token or API key"
+        },
+        "api_key": {
+          "type": "string",
+          "description": "API key for authentication"
+        },
+        "certificate_path": {
+          "type": "string",
+          "description": "Path to client certificate"
+        },
+        "private_key_path": {
+          "type": "string",
+          "description": "Path to private key"
+        },
+        "ca_cert_path": {
+          "type": "string",
+          "description": "Path to CA certificate"
+        }
+      },
+      "if": {
+        "properties": {
+          "type": {
+            "const": "basic"
+          }
+        }
+      },
+      "then": {
+        "required": ["username", "password"]
+      }
+    },
+    "index_settings": {
+      "type": "object",
+      "properties": {
+        "number_of_shards": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "default": 1,
+          "description": "Number of primary shards"
+        },
+        "number_of_replicas": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10,
+          "default": 0,
+          "description": "Number of replica shards"
+        },
+        "refresh_interval": {
+          "type": "string",
+          "pattern": "^-?1|\\d+[ms]?$",
+          "default": "1s",
+          "description": "Index refresh interval"
+        },
+        "max_result_window": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647,
+          "default": 10000,
+          "description": "Maximum number of results that can be returned"
+        },
+        "analysis": {
+          "type": "object",
+          "properties": {
+            "analyzers": {
+              "type": "object",
+              "patternProperties": {
+                "^[a-zA-Z0-9_]+$": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "enum": ["standard", "simple", "whitespace", "stop", "keyword", "pattern", "language", "custom"]
+                    },
+                    "tokenizer": {
+                      "type": "string"
+                    },
+                    "filters": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "char_filters": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "tokenizers": {
+              "type": "object",
+              "patternProperties": {
+                "^[a-zA-Z0-9_]+$": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "pattern": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            },
+            "filters": {
+              "type": "object",
+              "patternProperties": {
+                "^[a-zA-Z0-9_]+$": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "mapping": {
+      "type": "object",
+      "properties": {
+        "dynamic": {
+          "type": ["boolean", "string"],
+          "enum": [true, false, "strict"],
+          "default": true,
+          "description": "Whether to allow dynamic mapping"
+        },
+        "properties": {
+          "type": "object",
+          "patternProperties": {
+            "^[a-zA-Z0-9_]+$": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "enum": ["text", "keyword", "long", "integer", "short", "byte", "double", "float", "half_float", "scaled_float", "date", "boolean", "binary", "object", "nested", "geo_point", "geo_shape", "ip", "completion", "token_count", "percolator", "join", "rank_feature", "rank_features", "dense_vector", "sparse_vector", "search_as_you_type", "alias", "flattened", "shape", "point", "version", "aggregate_metric_double"]
+                },
+                "analyzer": {
+                  "type": "string",
+                  "description": "Analyzer to use for this field"
+                },
+                "search_analyzer": {
+                  "type": "string",
+                  "description": "Analyzer to use when searching this field"
+                },
+                "index": {
+                  "type": "boolean",
+                  "default": true,
+                  "description": "Whether this field is indexed"
+                },
+                "store": {
+                  "type": "boolean",
+                  "default": false,
+                  "description": "Whether to store this field"
+                },
+                "fields": {
+                  "type": "object",
+                  "description": "Multi-fields for this property"
+                },
+                "format": {
+                  "type": "string",
+                  "description": "Date format (for date fields)"
+                },
+                "boost": {
+                  "type": "number",
+                  "minimum": 0,
+                  "description": "Boost factor for this field"
+                },
+                "copy_to": {
+                  "oneOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  ],
+                  "description": "Fields to copy this field's value to"
+                },
+                "properties": {
+                  "type": "object",
+                  "description": "Properties for object/nested fields"
+                }
+              },
+              "required": ["type"]
+            }
+          }
+        }
+      }
+    },
+    "indexing_config": {
+      "type": "object",
+      "properties": {
+        "indexing_mode": {
+          "type": "string",
+          "enum": ["bulk", "single", "real_time", "batch"],
+          "default": "bulk",
+          "description": "Indexing mode to use"
+        },
+        "batch_size": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10000,
+          "default": 100,
+          "description": "Number of documents to index in a single batch"
+        },
+        "max_batch_size": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100000,
+          "default": 1000,
+          "description": "Maximum batch size for bulk operations"
+        },
+        "flush_interval": {
+          "type": "integer",
+          "minimum": 100,
+          "maximum": 60000,
+          "default": 5000,
+          "description": "Flush interval in milliseconds"
+        },
+        "parallel_workers": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 32,
+          "default": 4,
+          "description": "Number of parallel indexing workers"
+        },
+        "memory_limit": {
+          "type": "string",
+          "pattern": "^\\d+[KMGT]?B$",
+          "default": "512MB",
+          "description": "Memory limit for indexing operations"
+        },
+        "compression": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "default": false
+            },
+            "algorithm": {
+              "type": "string",
+              "enum": ["gzip", "lz4", "snappy"],
+              "default": "gzip"
+            }
+          }
+        }
+      }
+    },
+    "features": {
+      "type": "object",
+      "properties": {
+        "faceted_search": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable faceted search capabilities"
+        },
+        "auto_complete": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable auto-completion features"
+        },
+        "spell_correction": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable spell correction"
+        },
+        "relevance_tuning": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable relevance tuning features"
+        },
+        "highlighting": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable search result highlighting"
+        },
+        "suggestions": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable search suggestions"
+        },
+        "more_like_this": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable 'more like this' functionality"
+        },
+        "geospatial_search": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable geospatial search capabilities"
+        }
+      }
+    },
+    "facets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "field": {
+            "type": "string",
+            "description": "Field to create facet for"
+          },
+          "type": {
+            "type": "string",
+            "enum": ["terms", "range", "date_histogram", "histogram", "date_range", "ip_range", "geo_distance"],
+            "description": "Type of facet"
+          },
+          "size": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1000,
+            "default": 10,
+            "description": "Number of facet values to return"
+          },
+          "min_doc_count": {
+            "type": "integer",
+            "minimum": 0,
+            "default": 1,
+            "description": "Minimum document count for facet values"
+          },
+          "interval": {
+            "type": "string",
+            "description": "Interval for histogram facets"
+          },
+          "ranges": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "from": {
+                  "type": ["number", "string"]
+                },
+                "to": {
+                  "type": ["number", "string"]
+                },
+                "key": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Ranges for range facets"
+          }
+        },
+        "required": ["field", "type"]
+      }
+    },
+    "search_optimization": {
+      "type": "object",
+      "properties": {
+        "caching": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "default": true
+            },
+            "cache_size": {
+              "type": "string",
+              "pattern": "^\\d+[KMGT]?B$",
+              "default": "100MB"
+            },
+            "ttl": {
+              "type": "integer",
+              "minimum": 60,
+              "maximum": 86400,
+              "default": 3600,
+              "description": "Cache TTL in seconds"
+            }
+          }
+        },
+        "query_optimization": {
+          "type": "object",
+          "properties": {
+            "enable_profiling": {
+              "type": "boolean",
+              "default": false
+            },
+            "slow_query_threshold": {
+              "type": "string",
+              "pattern": "^\\d+[ms]?$",
+              "default": "1s"
+            },
+            "routing_enabled": {
+              "type": "boolean",
+              "default": false
+            },
+            "preference": {
+              "type": "string",
+              "description": "Search preference for routing"
+            }
+          }
+        },
+        "index_optimization": {
+          "type": "object",
+          "properties": {
+            "force_merge_segments": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 1
+            },
+            "delete_by_query_conflicts": {
+              "type": "string",
+              "enum": ["abort", "proceed"],
+              "default": "abort"
+            },
+            "translog_flush_threshold_size": {
+              "type": "string",
+              "pattern": "^\\d+[KMGT]?B$",
+              "default": "512MB"
+            }
+          }
+        }
+      }
+    },
+    "monitoring": {
+      "type": "object",
+      "properties": {
+        "health_check_interval": {
+          "type": "string",
+          "pattern": "^\\d+[ms]?$",
+          "default": "30s",
+          "description": "Health check interval"
+        },
+        "alert_on_errors": {
+          "type": "boolean",
+          "default": true,
+          "description": "Whether to alert on indexing errors"
+        },
+        "metrics_collection": {
+          "type": "boolean",
+          "default": true,
+          "description": "Whether to collect indexing metrics"
+        },
+        "index_size_alerts": {
+          "type": "object",
+          "properties": {
+            "warning_threshold": {
+              "type": "string",
+              "pattern": "^\\d+[KMGT]?B$"
+            },
+            "critical_threshold": {
+              "type": "string",
+              "pattern": "^\\d+[KMGT]?B$"
+            }
+          }
+        },
+        "performance_alerts": {
+          "type": "object",
+          "properties": {
+            "latency_threshold": {
+              "type": "string",
+              "pattern": "^\\d+[ms]?$"
+            },
+            "throughput_threshold": {
+              "type": "number",
+              "minimum": 0
+            },
+            "error_rate_threshold": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100
+            }
+          }
+        }
+      }
+    },
+    "maintenance": {
+      "type": "object",
+      "properties": {
+        "auto_cleanup": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable automatic cleanup of old indices"
+        },
+        "retention_policy": {
+          "type": "string",
+          "pattern": "^\\d+[dwmy]$",
+          "description": "Data retention policy (e.g., '30d', '12w', '6m', '1y')"
+        },
+        "cleanup_schedule": {
+          "type": "string",
+          "pattern": "^[0-5]?[0-9] [0-5]?[0-9] [0-2]?[0-9] [0-3]?[0-9] [0-1]?[0-9]$",
+          "description": "Cron schedule for cleanup tasks"
+        },
+        "reindex_schedule": {
+          "type": "string",
+          "pattern": "^[0-5]?[0-9] [0-5]?[0-9] [0-2]?[0-9] [0-3]?[0-9] [0-1]?[0-9]$",
+          "description": "Cron schedule for reindexing tasks"
+        },
+        "optimization_schedule": {
+          "type": "string",
+          "pattern": "^[0-5]?[0-9] [0-5]?[0-9] [0-2]?[0-9] [0-3]?[0-9] [0-1]?[0-9]$",
+          "description": "Cron schedule for index optimization"
+        }
+      }
+    },
+    "output_config": {
+      "type": "object",
+      "properties": {
+        "output_path": {
+          "type": "string",
+          "description": "Path for output files (for mock backend)"
+        },
+        "output_format": {
+          "type": "string",
+          "enum": ["json", "jsonl", "csv"],
+          "default": "json",
+          "description": "Output format for indexed data"
+        },
+        "include_metadata": {
+          "type": "boolean",
+          "default": true,
+          "description": "Whether to include indexing metadata in output"
+        },
+        "pretty_print": {
+          "type": "boolean",
+          "default": false,
+          "description": "Whether to pretty-print JSON output"
+        }
+      }
+    }
+  },
+  "required": ["indexer_config"]
+}

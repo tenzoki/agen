@@ -3,8 +3,8 @@ package kv
 import (
 	"time"
 
-	"github.com/agen/omni/internal/common"
-	"github.com/agen/omni/internal/storage"
+	"github.com/tenzoki/agen/omni/internal/common"
+	"github.com/tenzoki/agen/omni/internal/storage"
 )
 
 type KVStore interface {

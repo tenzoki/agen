@@ -1,0 +1,30 @@
+{
+  "name": "GOX Framework Test",
+  "version": "1.0.0",
+  "description": "Simple JSON test data for json-analyzer agent",
+  "features": ["text-processing", "document-analysis", "data-extraction"],
+  "metrics": {
+    "documents_processed": 1523,
+    "success_rate": 98.7,
+    "avg_processing_time": 2.3
+  },
+  "agents": [
+    {
+      "id": "text-analyzer-001",
+      "type": "text-analyzer",
+      "status": "active",
+      "last_seen": "2024-09-26T10:30:00Z"
+    },
+    {
+      "id": "json-analyzer-001",
+      "type": "json-analyzer",
+      "status": "active",
+      "last_seen": "2024-09-26T10:31:00Z"
+    }
+  ],
+  "settings": {
+    "debug": true,
+    "max_file_size": "50MB",
+    "supported_formats": ["json", "txt", "pdf", "png", "jpg"]
+  }
+}

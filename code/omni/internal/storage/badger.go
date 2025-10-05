@@ -388,6 +388,11 @@ type BadgerTransaction struct {
 	txn *badger.Txn
 }
 
+// NewBadgerTransaction wraps a badger.Txn to implement the Transaction interface
+func NewBadgerTransaction(txn *badger.Txn) *BadgerTransaction {
+	return &BadgerTransaction{txn: txn}
+}
+
 func (bt *BadgerTransaction) Get(key []byte) ([]byte, error) {
 	item, err := bt.txn.Get(key)
 	if err == badger.ErrKeyNotFound {

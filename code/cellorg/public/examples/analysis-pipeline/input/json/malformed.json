@@ -1,0 +1,22 @@
+{
+  "name": "Malformed JSON Example",
+  "description": "This JSON has intentional syntax errors for testing",
+  "config": {
+    "setting1": "value1",
+    "setting2": "value2",  // Invalid comment in JSON
+    "setting3": 'single quotes not allowed',
+    "setting4": undefined,  // undefined is not valid JSON
+    "setting5": {
+      "nested": true,
+      "missing_comma": "here"
+      "invalid": "syntax"
+    }
+  },
+  "array_example": [
+    "item1",
+    "item2",
+    "item3",  // trailing comma not allowed in strict JSON
+  ],
+  // Another comment that makes this invalid
+  "incomplete":
+}

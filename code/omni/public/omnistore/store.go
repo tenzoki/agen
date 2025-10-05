@@ -7,12 +7,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/agen/omni/internal/graph"
-	"github.com/agen/omni/internal/kv"
-	"github.com/agen/omni/internal/query"
-	"github.com/agen/omni/internal/storage"
-	"github.com/agen/omni/internal/transaction"
-	"github.com/agen/omni/internal/filestore"
+	"github.com/tenzoki/agen/omni/internal/graph"
+	"github.com/tenzoki/agen/omni/internal/kv"
+	"github.com/tenzoki/agen/omni/internal/query"
+	"github.com/tenzoki/agen/omni/internal/storage"
+	"github.com/tenzoki/agen/omni/internal/transaction"
+	"github.com/tenzoki/agen/omni/internal/filestore"
 )
 
 // OmniStoreImpl implements the OmniStore interface

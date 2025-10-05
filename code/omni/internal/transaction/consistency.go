@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/agen/omni/internal/common"
+	"github.com/tenzoki/agen/omni/internal/common"
 )
 
 // DefaultConsistencyChecker implements basic consistency checks

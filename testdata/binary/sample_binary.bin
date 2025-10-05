@@ -1,0 +1,9 @@
+GOX Framework Binary Test Data
+This file contains various byte patterns for testing binary analysis:
+
+ASCII text: Hello, World!
+Unicode: αβγδε ñüäöß 中文測試
+Control chars:
+
+Null bytes: Binary data patterns for testing extraction and analysis capabilities.
+EOF marker follows...

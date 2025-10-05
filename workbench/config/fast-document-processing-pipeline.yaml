@@ -1,0 +1,47 @@
+# Fast Document Processing Pipeline (simplified for speed)
+cell:
+  id: "pipeline:fast-document-processing"
+  description: "Simplified document processing pipeline optimized for speed"
+  debug: true
+
+  orchestration:
+    startup_timeout: "45s"
+    shutdown_timeout: "20s"
+    max_retries: 2
+    retry_delay: "5s"
+    health_check_interval: "15s"
+
+  agents:
+    # Text extraction
+    - id: "text-extractor-fast-001"
+      agent_type: "text-extractor"
+      ingress: "sub:fast-document-files"
+      egress: "pub:fast-extracted-text"
+      dependencies: []
+      config:
+        enable_ocr: false  # Disable OCR for speed
+        timeout_seconds: 30
+        worker_pool_size: 2
+
+    # Direct chunking without strategy selection
+    - id: "text-chunker-fast-001"
+      agent_type: "text-chunker"
+      ingress: "sub:fast-extracted-text"
+      egress: "pub:fast-chunked-text"
+      dependencies: ["text-extractor-fast-001"]
+      config:
+        default_chunk_size: 1024
+        max_chunk_size: 4096
+        default_overlap: 128
+
+    # Basic output without enrichment
+    - id: "chunk-writer-fast-001"
+      agent_type: "chunk-writer"
+      ingress: "sub:fast-chunked-text"
+      egress: "file:output/fast-processing/{{.request_id}}/chunk_{{.index}}.txt"
+      dependencies: ["text-chunker-fast-001"]
+      config:
+        default_output_format: "text"
+        output_directory: "output/fast-processing"
+        create_directories: true
+        preserve_metadata: false

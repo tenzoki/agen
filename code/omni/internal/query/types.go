@@ -5,7 +5,7 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/agen/omni/internal/common"
+	"github.com/tenzoki/agen/omni/internal/common"
 )
 
 // QueryStep represents a single step in a graph traversal query

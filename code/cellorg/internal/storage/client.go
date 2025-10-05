@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/agen/cellorg/internal/client"
+	"github.com/tenzoki/agen/cellorg/public/client"
 )
 
 // HTTPClient provides HTTP client for storage service

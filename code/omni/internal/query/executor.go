@@ -5,8 +5,8 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/agen/omni/internal/common"
-	"github.com/agen/omni/internal/graph"
+	"github.com/tenzoki/agen/omni/internal/common"
+	"github.com/tenzoki/agen/omni/internal/graph"
 )
 
 // QueryExecutor executes graph queries against a graph store

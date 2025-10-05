@@ -35,8 +35,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/agen/cellorg/internal/agent"
-	"github.com/agen/cellorg/internal/client"
+	"github.com/tenzoki/agen/cellorg/public/agent"
+	"github.com/tenzoki/agen/cellorg/public/client"
 )
 
 // TextChunker implements the GOX Framework agent pattern for text chunking.

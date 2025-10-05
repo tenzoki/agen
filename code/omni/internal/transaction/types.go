@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/agen/omni/internal/common"
+	"github.com/tenzoki/agen/omni/internal/common"
 )
 
 // IsolationLevel defines the transaction isolation level

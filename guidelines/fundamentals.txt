@@ -1,0 +1,199 @@
+Fundamentals (for AGEN)
+
+Intended Audience: AI / LLM
+File: guidelines/fundamentals.txt
+
+⸻
+
+Purpose
+
+If you are a human:
+This entire folder (guidelines/) contains operational and collaboration instructions for both the AI system and the human project manager.
+
+If you are an LLM (AI agent):
+	•	This file provides an overview and defines key operational rules.
+	•	Next steps:
+		•	Visit the reflect/ folder for architectural and conceptual context.
+		•	Visit guidelines/progress.txt to understand the history of recent changes.
+		•	Search the local Git repository if you require deeper insight into the evolution of the codebase.
+
+⸻
+
+Overview
+
+Project Name: AGEN
+Primary Runtime: alfa — an interactive AI workbench.
+You are currently operating within an alfa loop.
+Programming Language: Go
+
+Description:
+AGEN is a multi-purpose AI workbench that enables AI systems to build, modify, and optimize complex workflows using a composable cell-based pattern and a unified storage system (OmniStore). It provides:
+	•	zero-boilerplate agent development,
+	•	declarative YAML pipelines, and
+	•	self-modification capabilities,
+
+allowing the system to evolve its own codebase via voice or text interfaces.
+
+⸻
+
+Codebase Structure
+
+Note: Whenever the top-level structure changes (e.g., folders added, renamed, or removed), immediately update this description.
+
+.
+├── bin
+│   └── alfa
+├── builder
+│   ├── Makefile.omni
+│   ├── README.md
+│   └── test-omni.sh
+├── code
+│   ├── agents
+│   ├── alfa
+│   ├── atomic
+│   ├── cellorg
+│   ├── omni
+│   └── README.md
+├── drivers
+│   ├── README.md
+│   └── tokenizers
+├── guidelines
+│   ├── fundamentals.txt
+│   ├── progress.txt
+│   ├── README-template.md
+│   └── tasks.txt
+├── LICENSE
+├── README.md
+├── reflect
+│   ├── architecture
+│   ├── cells
+│   ├── manual
+│   ├── test-reports
+│   └── README.md
+├── testdata
+│   ├── binary
+│   ├── config
+│   ├── documents
+│   ├── edge-cases
+│   ├── images
+│   ├── json
+│   ├── multi-lang
+│   ├── multilingual
+│   ├── README.md
+│   ├── structured
+│   └── xml
+├── trained
+│   ├── coref
+│   ├── download_and_convert.py
+│   ├── embeddings
+│   ├── ner
+│   ├── README.md
+│   ├── requirements.txt
+│   └── venv
+└── workbench
+    ├── config
+    ├── demos
+    ├── projects
+    └── README.md
+
+
+⸻
+
+Folder Responsibilities
+	•	guidelines/ – Instructions for both the AI and the human collaborator.
+	•	bin/ – All binaries. Adjust make/build scripts to always output here.
+	•	builder/ – Makefiles, build and test scripts.
+	•	code/ – All Go source code, organized as:
+	•	atomic/ – Tools usable independently (no internal AGEN dependencies).
+	•	omni/ – Unified storage system (OmniStore, formerly godast).
+	•	agents/ – Implemented AI agents.
+	•	cellorg/ – Core code of the GOX pattern (base agents, brokers, etc.).
+	•	alfa/ – The AI workbench (as inherited from the AFA integration).
+	•	drivers/ – Platform-specific code and binaries (macOS, Docker, Linux, etc.).
+	•	trained/ – Model-related files (embeddings, NER, etc.).
+	•	support/ – Auto-generated knowledge content for AGEN’s self-awareness.
+	•	A pipeline (cell pattern) gathers all project READMEs to build a self-knowledge base.
+	•	Executed automatically on startup and upon self-modification.
+	•	workbench/ – Operational base for alfa, including the local Git repo.
+	•	workbench/projects/ – Specific alfa projects.
+	•	tests/ – Unit and integration tests placed alongside source files.
+	•	Aggregated test suites reside in builder/.
+	•	Reports are stored in /support.
+	•	demos/ – Example code (*_demo.go) placed beside source files.
+	•	testdata/ – Data for tests and demos.
+	•	README.md – Every folder includes a README using guidelines/README-template.md.
+
+⸻
+
+Collaboration Protocol
+
+alfa = You (the AI Agent)
+I = The human collaborator
+
+Task management:
+	•	Primary tasks are defined via alfa (the workbench).
+	•	Additional or prerequisite tasks are found in guidelines/tasks.txt.
+	•	If tasks.txt is empty or outdated, ignore it.
+
+Feedback Process:
+If you encounter an issue or improvement opportunity:
+	1.	Output the issue in your current alfa response.
+	2.	Log it in guidelines/suggestions.txt with a short proposed solution.
+
+Concept and Planning Documents:
+May be placed here (in guidelines/), but not final documentation.
+
+Self-test on start:
+	•	Check reflect/test-reports/
+		•	firsly check if latest-summary.txt indicates test failures
+		•	if there are failed test: check latest-report.md for details
+			•	try to fix the problem, inform me about outcome
+⸻
+
+Task Execution
+	1.	Prioritize guidelines/tasks.txt if it defines prerequisites.
+	2.	Otherwise, continue regular alfa-assigned tasks.
+	3.	Upon completing a set of tasks:
+		•	Report progress directly to me in the alfa interface.
+		•	Add a summary entry at the top of guidelines/progress.txt:
+		•	Include title, timestamp, and short description.
+		•	Do not delete or overwrite previous entries.
+
+⸻
+
+Contributions & Constraints
+
+You may:
+	•	Create new agents or cells to extend functionality.
+	•	Write and improve tests and demos.
+	•	Update and optimize READMEs (using the shared template).
+
+Crucial constraint:
+	•	Changes you consider must always be fully compliant with the fundamental architecture principles as described in: reflect/immutable-principles.md
+	•	Check that file before the change!
+
+You must not:
+	•	Your changes must not violate the fundamental principles in any way!
+		•	Always check compliance against these rules as described in: reflect/immutable-principles.md
+	•	Modify the main runtime (alfa) without approval.
+	•	Alter the core cell orchestration pattern.
+
+Before committing:
+	1.	Verify code compiles.
+	2.	Write tests to confirm correct behavior.
+	3.	Ensure tests compile and pass.
+	4.	Commit the change.
+
+⸻
+
+Commit Rules
+	•	Use the VCR abstraction for commits.
+	•	You may add and commit, but never push.
+	•	Always remain on the main branch.
+	•	Temporary branches are allowed for experiments but must be switched back afterward.
+
+Versioning format: <main>.<feature>.<patch>
+	•	Do not alter <main> unless explicitly approved.
+	•	Increment <feature> for new agents or cells.
+	•	Increment <patch> for tests, bug fixes, or documentation updates.
+

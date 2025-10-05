@@ -10,21 +10,21 @@ import (
 	"strings"
 	"time"
 
-	"github.com/agen/cellorg/internal/agent"
-	"github.com/agen/cellorg/internal/client"
-	"github.com/agen/cellorg/internal/storage"
+	"github.com/tenzoki/agen/cellorg/public/agent"
+	"github.com/tenzoki/agen/cellorg/public/client"
+	"github.com/tenzoki/agen/omni/public/omnistore"
 )
 
 // AnonymizerAgent performs pseudonymization using persistent mappings
 type AnonymizerAgent struct {
 	agent.DefaultAgentRunner
-	storageClient *storage.Client
-	config        *AnonymizerConfig
+	omniStore omnistore.OmniStore
+	config    *AnonymizerConfig
 }
 
 // AnonymizerConfig holds configuration for anonymizer
 type AnonymizerConfig struct {
-	StorageAgentID  string `yaml:"storage_agent_id"`
+	DataPath        string `yaml:"data_path"`
 	PipelineVersion string `yaml:"pipeline_version"`
 	EnableDebug     bool   `yaml:"enable_debug"`
 	TimeoutSeconds  int    `yaml:"timeout_seconds"`
@@ -59,23 +59,22 @@ type AnonymizerResponse struct {
 func (a *AnonymizerAgent) Init(base *agent.BaseAgent) error {
 	// Load configuration
 	config := &AnonymizerConfig{
-		StorageAgentID:  base.GetConfigString("storage_agent_id", "anon-store-001"),
+		DataPath:        base.GetConfigString("data_path", "./data/anonymizer"),
 		PipelineVersion: base.GetConfigString("pipeline_version", "v1.0"),
 		EnableDebug:     base.GetConfigBool("enable_debug", false),
 		TimeoutSeconds:  base.GetConfigInt("timeout_seconds", 30),
 	}
 	a.config = config
 
-	// Initialize storage client
-	brokerClient := base.GetBrokerClient()
-	if brokerClient == nil {
-		return fmt.Errorf("broker client not available")
+	// Initialize omnistore
+	store, err := omnistore.NewOmniStoreWithDefaults(config.DataPath)
+	if err != nil {
+		return fmt.Errorf("failed to initialize omnistore: %w", err)
 	}
-
-	a.storageClient = storage.NewClient(base.AgentID, brokerClient)
+	a.omniStore = store
 
 	base.LogInfo("Anonymizer initialized")
-	base.LogInfo("Storage agent: %s", config.StorageAgentID)
+	base.LogInfo("Data path: %s", config.DataPath)
 	base.LogInfo("Pipeline version: %s", config.PipelineVersion)
 
 	return nil
@@ -88,7 +87,11 @@ func (a *AnonymizerAgent) ProcessMessage(
 ) (*client.BrokerMessage, error) {
 	// Parse request
 	var req AnonymizerRequest
-	if err := json.Unmarshal(msg.Payload, &req); err != nil {
+	payload, ok := msg.Payload.([]byte)
+	if !ok {
+		return a.errorResponse("invalid payload type"), nil
+	}
+	if err := json.Unmarshal(payload, &req); err != nil {
 		return a.errorResponse("invalid request format"), nil
 	}
 
@@ -102,9 +105,6 @@ func (a *AnonymizerAgent) ProcessMessage(
 
 	// Get project ID from message metadata or config
 	projectID := req.ProjectID
-	if projectID == "" {
-		projectID = base.GetProjectID()
-	}
 	if projectID == "" {
 		projectID = "default"
 	}
@@ -157,20 +157,17 @@ func (a *AnonymizerAgent) getOrCreatePseudonym(
 	forwardKey := fmt.Sprintf("anon:forward:%s:%s", projectID, entity.Text)
 
 	// Try to lookup existing pseudonym
-	getReq := storage.StorageRequest{
-		Operation: "get",
-		Key:       forwardKey,
-		RequestID: fmt.Sprintf("get-%d", time.Now().UnixNano()),
-	}
-
-	getResp, err := a.storageClient.SendRequest(getReq)
-	if err == nil && getResp.Success {
-		// Found existing mapping
-		if pseudonym, ok := getResp.Result.(map[string]interface{})["pseudonym"].(string); ok {
-			if a.config.EnableDebug {
-				base.LogInfo("Reusing pseudonym for %s: %s", entity.Text, pseudonym)
+	result, err := a.omniStore.KV().Get(forwardKey)
+	if err == nil && result != nil {
+		// Found existing mapping - unmarshal JSON
+		var mappingData map[string]interface{}
+		if err := json.Unmarshal(result, &mappingData); err == nil {
+			if pseudonym, ok := mappingData["pseudonym"].(string); ok {
+				if a.config.EnableDebug {
+					base.LogInfo("Reusing pseudonym for %s: %s", entity.Text, pseudonym)
+				}
+				return pseudonym, nil
 			}
-			return pseudonym, nil
 		}
 	}
 
@@ -191,15 +188,13 @@ func (a *AnonymizerAgent) getOrCreatePseudonym(
 		"confidence":       entity.Confidence,
 	}
 
-	setReq := storage.StorageRequest{
-		Operation: "set",
-		Key:       forwardKey,
-		Value:     forwardValue,
-		RequestID: fmt.Sprintf("set-forward-%d", time.Now().UnixNano()),
+	// Marshal forward value to JSON
+	forwardBytes, err := json.Marshal(forwardValue)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal forward mapping: %w", err)
 	}
 
-	_, err = a.storageClient.SendRequest(setReq)
-	if err != nil {
+	if err := a.omniStore.KV().Set(forwardKey, forwardBytes); err != nil {
 		return "", fmt.Errorf("failed to store forward mapping: %w", err)
 	}
 
@@ -211,16 +206,15 @@ func (a *AnonymizerAgent) getOrCreatePseudonym(
 		"entity_type": entity.Type,
 	}
 
-	reverseReq := storage.StorageRequest{
-		Operation: "set",
-		Key:       reverseKey,
-		Value:     reverseValue,
-		RequestID: fmt.Sprintf("set-reverse-%d", time.Now().UnixNano()),
+	// Marshal reverse value to JSON
+	reverseBytes, err := json.Marshal(reverseValue)
+	if err != nil {
+		base.LogInfo("Failed to marshal reverse mapping: %v", err)
+		return pseudonym, nil // Not critical
 	}
 
-	_, err = a.storageClient.SendRequest(reverseReq)
-	if err != nil {
-		base.LogWarn("Failed to store reverse mapping: %v", err)
+	if err := a.omniStore.KV().Set(reverseKey, reverseBytes); err != nil {
+		base.LogInfo("Failed to store reverse mapping: %v", err)
 		// Not critical - forward mapping is stored
 	}
 
@@ -286,6 +280,11 @@ func (a *AnonymizerAgent) errorResponse(errorMsg string) *client.BrokerMessage {
 
 // Cleanup releases resources
 func (a *AnonymizerAgent) Cleanup(base *agent.BaseAgent) {
+	if a.omniStore != nil {
+		if err := a.omniStore.Close(); err != nil {
+			base.LogInfo("Error closing omnistore: %v", err)
+		}
+	}
 	base.LogInfo("Anonymizer agent cleanup complete")
 }
 

@@ -1,0 +1,11 @@
+id,name,category,score,processed_date,status
+1,"Document Alpha",research,85.7,2024-09-26,completed
+2,"Report Beta",analysis,92.3,2024-09-25,completed
+3,"Data Gamma",metrics,78.1,2024-09-24,in_progress
+4,"File Delta",documentation,89.5,2024-09-23,completed
+5,"Text Epsilon",sample,76.8,2024-09-22,failed
+6,"Content Zeta",test,94.2,2024-09-21,completed
+7,"Paper Eta",research,83.6,2024-09-20,completed
+8,"Study Theta",analysis,88.9,2024-09-19,completed
+9,"Info Iota",metrics,81.4,2024-09-18,completed
+10,"Doc Kappa",documentation,90.1,2024-09-17,completed

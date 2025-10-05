@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/agen/cellorg/internal/broker"
+	"github.com/tenzoki/agen/cellorg/internal/broker"
 	"gopkg.in/yaml.v3"
 )
 

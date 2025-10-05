@@ -1,0 +1,68 @@
+pool:
+  agent_types:
+    # Text Processing Agents
+    - agent_type: "text-analyzer"
+      binary: "agents/text_analyzer/main.go"
+      operator: "spawn"
+      capabilities: ["text-analysis", "sentiment", "keywords"]
+      description: "Analyzes text content for sentiment, keywords, and patterns"
+
+    - agent_type: "text-extractor"
+      binary: "agents/text_extractor/main.go"
+      operator: "spawn"
+      capabilities: ["ocr", "text-extraction", "pdf-processing"]
+      description: "Extracts text from documents and images using OCR"
+
+    # Data Analysis Agents
+    - agent_type: "json-analyzer"
+      binary: "agents/json_analyzer/main.go"
+      operator: "spawn"
+      capabilities: ["json-parsing", "schema-validation", "data-extraction"]
+      description: "Analyzes and validates JSON documents"
+
+    - agent_type: "xml-analyzer"
+      binary: "agents/xml_analyzer/main.go"
+      operator: "spawn"
+      capabilities: ["xml-parsing", "xpath-queries", "schema-validation"]
+      description: "Processes and analyzes XML documents"
+
+    - agent_type: "binary-analyzer"
+      binary: "agents/binary_analyzer/main.go"
+      operator: "spawn"
+      capabilities: ["binary-analysis", "file-type-detection", "metadata-extraction"]
+      description: "Analyzes binary files and extracts metadata"
+
+    # File Processing Agents
+    - agent_type: "file-ingester"
+      binary: "agents/file_ingester/main.go"
+      operator: "spawn"
+      capabilities: ["file-ingestion", "directory-watching", "batch-processing"]
+      description: "Ingests files from various sources"
+
+    - agent_type: "file-writer"
+      binary: "agents/file_writer/main.go"
+      operator: "spawn"
+      capabilities: ["file-writing", "format-conversion", "output-generation"]
+      description: "Writes processed data to files in various formats"
+
+    # file-splitter removed - use text_chunker agent in chunking cells instead
+
+    # Content Processing Agents
+    - agent_type: "document-processor"
+      binary: "agents/document_processor/main.go"
+      operator: "spawn"
+      capabilities: ["document-processing", "format-conversion", "metadata-extraction"]
+      description: "Processes various document formats"
+
+    # Specialized Agents
+    - agent_type: "image-analyzer"
+      binary: "agents/image_analyzer/main.go"
+      operator: "spawn"
+      capabilities: ["image-analysis", "metadata-extraction", "format-detection"]
+      description: "Analyzes image files and extracts metadata"
+
+    - agent_type: "summary-generator"
+      binary: "agents/summary_generator/main.go"
+      operator: "spawn"
+      capabilities: ["text-summarization", "key-point-extraction", "content-analysis"]
+      description: "Generates summaries from processed content"

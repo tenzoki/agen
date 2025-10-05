@@ -1,0 +1,72 @@
+# Intelligent Document Processing Pipeline (Framework-compliant)
+cell:
+  id: "pipeline:intelligent-document-processing"
+  description: "Complete intelligent document processing with strategy selection and context enrichment"
+  debug: true
+
+  orchestration:
+    startup_timeout: "90s"
+    shutdown_timeout: "30s"
+    max_retries: 3
+    retry_delay: "10s"
+    health_check_interval: "30s"
+
+  agents:
+    # Text extraction step
+    - id: "text-extractor-idp-001"
+      agent_type: "text-extractor"
+      ingress: "sub:document-files"
+      egress: "pub:extracted-text"
+      dependencies: []
+      config:
+        enable_ocr: true
+        ocr_languages: "eng,deu,fra"
+        timeout_seconds: 120
+        worker_pool_size: 4
+
+    # Strategy selection step
+    - id: "strategy-selector-idp-001"
+      agent_type: "strategy-selector"
+      ingress: "sub:extracted-text"
+      egress: "pub:selected-strategies"
+      dependencies: ["text-extractor-idp-001"]
+      config:
+        default_strategy: "document_aware"
+        enable_content_analysis: true
+
+    # Text chunking step
+    - id: "text-chunker-idp-001"
+      agent_type: "text-chunker"
+      ingress: "sub:selected-strategies"
+      egress: "pub:chunked-text"
+      dependencies: ["strategy-selector-idp-001"]
+      config:
+        default_chunk_size: 2048
+        max_chunk_size: 8192
+        default_overlap: 256
+
+    # Context enrichment step
+    - id: "context-enricher-idp-001"
+      agent_type: "context-enricher"
+      ingress: "sub:chunked-text"
+      egress: "pub:enriched-chunks"
+      dependencies: ["text-chunker-idp-001"]
+      config:
+        enable_positional_context: true
+        enable_semantic_context: true
+        enable_structural_context: true
+        enable_relational_context: true
+        context_depth: 3
+
+    # Output writing step
+    - id: "chunk-writer-idp-001"
+      agent_type: "chunk-writer"
+      ingress: "sub:enriched-chunks"
+      egress: "file:output/intelligent-processing/{{.request_id}}/{{.format}}/chunk_{{.index}}.{{.ext}}"
+      dependencies: ["context-enricher-idp-001"]
+      config:
+        default_output_format: "json"
+        output_directory: "output/intelligent-processing"
+        create_directories: true
+        preserve_metadata: true
+        naming_scheme: "chunk_XXXX"

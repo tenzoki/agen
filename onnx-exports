@@ -1,0 +1,11 @@
+#!/bin/bash
+# CGO Build Configuration for ONNX and Tokenizers
+# Source this file before building agents that require native libraries
+
+# Get the absolute path to the project root
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Set CGO flags to include drivers/tokenizers
+export CGO_LDFLAGS="-L${PROJECT_ROOT}/drivers/tokenizers -ltokenizers -ldl -lm -lstdc++"
+
+echo "CGO_LDFLAGS set to: $CGO_LDFLAGS"

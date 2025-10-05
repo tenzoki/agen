@@ -3,8 +3,9 @@ package transaction
 import (
 	"fmt"
 
-	"github.com/agen/omni/internal/common"
-	"github.com/agen/omni/internal/graph"
+	"github.com/tenzoki/agen/omni/internal/common"
+	"github.com/tenzoki/agen/omni/internal/graph"
+	"github.com/tenzoki/agen/omni/internal/storage"
 )
 
 // Vertex Operations (GraphTx interface implementation)
@@ -23,8 +24,11 @@ func (tx *graphTransaction) CreateVertex(vertex *common.Vertex) error {
 		return fmt.Errorf("vertex validation failed: %w", err)
 	}
 
+	// Wrap badger transaction for use with graph store
+	storageTx := storage.NewBadgerTransaction(tx.badgerTx)
+
 	// Check if vertex already exists
-	exists, err := tx.graphStore.VertexExists(vertex.ID)
+	exists, err := tx.graphStore.VertexExistsInTx(storageTx, vertex.ID)
 	if err != nil {
 		return fmt.Errorf("failed to check vertex existence: %w", err)
 	}
@@ -32,8 +36,8 @@ func (tx *graphTransaction) CreateVertex(vertex *common.Vertex) error {
 		return fmt.Errorf("vertex %s already exists", vertex.ID)
 	}
 
-	// Create vertex using graph store
-	if err := tx.graphStore.AddVertex(vertex); err != nil {
+	// Create vertex using graph store with transaction
+	if err := tx.graphStore.AddVertexInTx(storageTx, vertex); err != nil {
 		return fmt.Errorf("failed to create vertex: %w", err)
 	}
 
@@ -53,7 +57,10 @@ func (tx *graphTransaction) GetVertex(id string) (*common.Vertex, error) {
 		return nil, err
 	}
 
-	vertex, err := tx.graphStore.GetVertex(id)
+	// Wrap badger transaction for use with graph store
+	storageTx := storage.NewBadgerTransaction(tx.badgerTx)
+
+	vertex, err := tx.graphStore.GetVertexInTx(storageTx, id)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get vertex: %w", err)
 	}
@@ -79,14 +86,17 @@ func (tx *graphTransaction) UpdateVertex(vertex *common.Vertex) error {
 		return fmt.Errorf("vertex validation failed: %w", err)
 	}
 
+	// Wrap badger transaction for use with graph store
+	storageTx := storage.NewBadgerTransaction(tx.badgerTx)
+
 	// Get old vertex for rollback
-	oldVertex, err := tx.graphStore.GetVertex(vertex.ID)
+	oldVertex, err := tx.graphStore.GetVertexInTx(storageTx, vertex.ID)
 	if err != nil {
 		return fmt.Errorf("failed to get existing vertex: %w", err)
 	}
 
-	// Update vertex using graph store
-	if err := tx.graphStore.UpdateVertex(vertex); err != nil {
+	// Update vertex using graph store with transaction
+	if err := tx.graphStore.UpdateVertexInTx(storageTx, vertex); err != nil {
 		return fmt.Errorf("failed to update vertex: %w", err)
 	}
 
@@ -107,14 +117,17 @@ func (tx *graphTransaction) DeleteVertex(id string) error {
 		return err
 	}
 
+	// Wrap badger transaction for use with graph store
+	storageTx := storage.NewBadgerTransaction(tx.badgerTx)
+
 	// Get vertex for rollback
-	vertex, err := tx.graphStore.GetVertex(id)
+	vertex, err := tx.graphStore.GetVertexInTx(storageTx, id)
 	if err != nil {
 		return fmt.Errorf("failed to get vertex for deletion: %w", err)
 	}
 
-	// Delete vertex using graph store
-	if err := tx.graphStore.DeleteVertex(id); err != nil {
+	// Delete vertex using graph store with transaction
+	if err := tx.graphStore.DeleteVertexInTx(storageTx, id); err != nil {
 		return fmt.Errorf("failed to delete vertex: %w", err)
 	}
 
@@ -134,7 +147,10 @@ func (tx *graphTransaction) VertexExists(id string) (bool, error) {
 		return false, err
 	}
 
-	return tx.graphStore.VertexExists(id)
+	// Wrap badger transaction for use with graph store
+	storageTx := storage.NewBadgerTransaction(tx.badgerTx)
+
+	return tx.graphStore.VertexExistsInTx(storageTx, id)
 }
 
 // Edge Operations
@@ -153,8 +169,11 @@ func (tx *graphTransaction) CreateEdge(edge *common.Edge) error {
 		return fmt.Errorf("edge validation failed: %w", err)
 	}
 
+	// Wrap badger transaction for use with graph store
+	storageTx := storage.NewBadgerTransaction(tx.badgerTx)
+
 	// Check if edge already exists
-	exists, err := tx.graphStore.EdgeExists(edge.ID)
+	exists, err := tx.graphStore.EdgeExistsInTx(storageTx, edge.ID)
 	if err != nil {
 		return fmt.Errorf("failed to check edge existence: %w", err)
 	}
@@ -163,15 +182,15 @@ func (tx *graphTransaction) CreateEdge(edge *common.Edge) error {
 	}
 
 	// Verify that source and target vertices exist
-	if exists, err := tx.graphStore.VertexExists(edge.FromVertex); err != nil || !exists {
+	if exists, err := tx.graphStore.VertexExistsInTx(storageTx, edge.FromVertex); err != nil || !exists {
 		return fmt.Errorf("source vertex %s does not exist", edge.FromVertex)
 	}
-	if exists, err := tx.graphStore.VertexExists(edge.ToVertex); err != nil || !exists {
+	if exists, err := tx.graphStore.VertexExistsInTx(storageTx, edge.ToVertex); err != nil || !exists {
 		return fmt.Errorf("target vertex %s does not exist", edge.ToVertex)
 	}
 
-	// Create edge using graph store
-	if err := tx.graphStore.AddEdge(edge); err != nil {
+	// Create edge using graph store with transaction
+	if err := tx.graphStore.AddEdgeInTx(storageTx, edge); err != nil {
 		return fmt.Errorf("failed to create edge: %w", err)
 	}
 
@@ -191,7 +210,10 @@ func (tx *graphTransaction) GetEdge(edgeID string) (*common.Edge, error) {
 		return nil, err
 	}
 
-	edge, err := tx.graphStore.GetEdge(edgeID)
+	// Wrap badger transaction for use with graph store
+	storageTx := storage.NewBadgerTransaction(tx.badgerTx)
+
+	edge, err := tx.graphStore.GetEdgeInTx(storageTx, edgeID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get edge: %w", err)
 	}
@@ -208,14 +230,17 @@ func (tx *graphTransaction) DeleteEdge(edgeID string) error {
 		return err
 	}
 
+	// Wrap badger transaction for use with graph store
+	storageTx := storage.NewBadgerTransaction(tx.badgerTx)
+
 	// Get edge for rollback
-	edge, err := tx.graphStore.GetEdge(edgeID)
+	edge, err := tx.graphStore.GetEdgeInTx(storageTx, edgeID)
 	if err != nil {
 		return fmt.Errorf("failed to get edge for deletion: %w", err)
 	}
 
-	// Delete edge using graph store
-	if err := tx.graphStore.DeleteEdge(edgeID); err != nil {
+	// Delete edge using graph store with transaction
+	if err := tx.graphStore.DeleteEdgeInTx(storageTx, edgeID); err != nil {
 		return fmt.Errorf("failed to delete edge: %w", err)
 	}
 
@@ -235,7 +260,10 @@ func (tx *graphTransaction) EdgeExists(edgeID string) (bool, error) {
 		return false, err
 	}
 
-	return tx.graphStore.EdgeExists(edgeID)
+	// Wrap badger transaction for use with graph store
+	storageTx := storage.NewBadgerTransaction(tx.badgerTx)
+
+	return tx.graphStore.EdgeExistsInTx(storageTx, edgeID)
 }
 
 // Query Operations
@@ -433,22 +461,27 @@ func (tx *graphTransaction) BatchCreateVertices(vertices []*common.Vertex) error
 		return err
 	}
 
+	// Wrap badger transaction for use with graph store
+	storageTx := storage.NewBadgerTransaction(tx.badgerTx)
+
 	// Validate all vertices first
 	for _, vertex := range vertices {
 		if err := vertex.Validate(); err != nil {
 			return fmt.Errorf("vertex validation failed for %s: %w", vertex.ID, err)
 		}
 
-		if exists, err := tx.graphStore.VertexExists(vertex.ID); err != nil {
+		if exists, err := tx.graphStore.VertexExistsInTx(storageTx, vertex.ID); err != nil {
 			return fmt.Errorf("failed to check existence for vertex %s: %w", vertex.ID, err)
 		} else if exists {
 			return fmt.Errorf("vertex %s already exists", vertex.ID)
 		}
 	}
 
-	// Create all vertices
-	if err := tx.graphStore.BatchAddVertices(vertices); err != nil {
-		return fmt.Errorf("failed to batch create vertices: %w", err)
+	// Create all vertices using transactional method
+	for _, vertex := range vertices {
+		if err := tx.graphStore.AddVertexInTx(storageTx, vertex); err != nil {
+			return fmt.Errorf("failed to create vertex %s: %w", vertex.ID, err)
+		}
 	}
 
 	// Log operations
@@ -469,30 +502,35 @@ func (tx *graphTransaction) BatchCreateEdges(edges []*common.Edge) error {
 		return err
 	}
 
+	// Wrap badger transaction for use with graph store
+	storageTx := storage.NewBadgerTransaction(tx.badgerTx)
+
 	// Validate all edges first
 	for _, edge := range edges {
 		if err := edge.Validate(); err != nil {
 			return fmt.Errorf("edge validation failed for %s: %w", edge.ID, err)
 		}
 
-		if exists, err := tx.graphStore.EdgeExists(edge.ID); err != nil {
+		if exists, err := tx.graphStore.EdgeExistsInTx(storageTx, edge.ID); err != nil {
 			return fmt.Errorf("failed to check existence for edge %s: %w", edge.ID, err)
 		} else if exists {
 			return fmt.Errorf("edge %s already exists", edge.ID)
 		}
 
 		// Verify vertices exist
-		if exists, err := tx.graphStore.VertexExists(edge.FromVertex); err != nil || !exists {
+		if exists, err := tx.graphStore.VertexExistsInTx(storageTx, edge.FromVertex); err != nil || !exists {
 			return fmt.Errorf("source vertex %s does not exist for edge %s", edge.FromVertex, edge.ID)
 		}
-		if exists, err := tx.graphStore.VertexExists(edge.ToVertex); err != nil || !exists {
+		if exists, err := tx.graphStore.VertexExistsInTx(storageTx, edge.ToVertex); err != nil || !exists {
 			return fmt.Errorf("target vertex %s does not exist for edge %s", edge.ToVertex, edge.ID)
 		}
 	}
 
-	// Create all edges
-	if err := tx.graphStore.BatchAddEdges(edges); err != nil {
-		return fmt.Errorf("failed to batch create edges: %w", err)
+	// Create all edges using transactional method
+	for _, edge := range edges {
+		if err := tx.graphStore.AddEdgeInTx(storageTx, edge); err != nil {
+			return fmt.Errorf("failed to create edge %s: %w", edge.ID, err)
+		}
 	}
 
 	// Log operations

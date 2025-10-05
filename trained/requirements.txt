@@ -1,0 +1,18 @@
+# Python dependencies for model conversion
+
+# Core ML libraries
+torch>=2.0.0
+transformers>=4.30.0
+sentencepiece>=0.1.99
+protobuf>=3.20.0
+
+# ONNX conversion tools
+onnx>=1.14.0
+onnxruntime>=1.15.0
+optimum[exporters]>=1.12.0
+
+# HuggingFace utilities
+huggingface-hub>=0.16.0
+
+# Additional dependencies
+numpy>=1.24.0

@@ -1,0 +1,11 @@
+Name,Age,Department,Position,Salary,Location
+John Smith,30,Engineering,Software Engineer,85000,"New York, NY"
+Jane Doe,25,Engineering,Data Scientist,90000,"San Francisco, CA"
+Bob Johnson,35,Product,Product Manager,95000,"Seattle, WA"
+Alice Wilson,28,Design,UX Designer,75000,"Austin, TX"
+Charlie Brown,32,Engineering,DevOps Engineer,88000,"Denver, CO"
+Diana Prince,29,Marketing,Marketing Manager,70000,"Chicago, IL"
+Eric Davis,31,Sales,Sales Director,100000,"Miami, FL"
+Fiona Green,26,Engineering,Frontend Developer,80000,"Portland, OR"
+George Miller,34,Operations,Operations Manager,85000,"Boston, MA"
+Helen Taylor,27,HR,HR Specialist,65000,"Atlanta, GA"

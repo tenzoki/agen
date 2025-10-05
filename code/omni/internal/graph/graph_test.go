@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/agen/omni/internal/common"
-	"github.com/agen/omni/internal/storage"
+	"github.com/tenzoki/agen/omni/internal/common"
+	"github.com/tenzoki/agen/omni/internal/storage"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

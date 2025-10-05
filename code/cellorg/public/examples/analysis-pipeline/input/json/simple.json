@@ -1,0 +1,41 @@
+{
+  "name": "Sample Configuration",
+  "version": "1.0.0",
+  "description": "Example JSON file for analyzer testing",
+  "config": {
+    "database": {
+      "host": "localhost",
+      "port": 5432,
+      "name": "test_db",
+      "ssl": true
+    },
+    "api": {
+      "base_url": "https://api.example.com",
+      "timeout": 30,
+      "retry_attempts": 3
+    },
+    "features": [
+      {
+        "name": "authentication",
+        "enabled": true,
+        "settings": {
+          "method": "jwt",
+          "expiry": "24h"
+        }
+      },
+      {
+        "name": "logging",
+        "enabled": true,
+        "settings": {
+          "level": "info",
+          "output": "file"
+        }
+      }
+    ]
+  },
+  "metadata": {
+    "created": "2024-09-27T10:00:00Z",
+    "author": "GOX Framework",
+    "tags": ["config", "example", "test"]
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "name": "Malformed JSON Test",
+  "description": "This JSON file contains intentional syntax errors for testing error handling",
+  "valid_field": "This field is valid",
+  "invalid_field": "This field has a missing comma"
+  "another_field": "This will cause a parse error",
+  "unclosed_string": "This string is not properly closed
+  "extra_comma": "This field has an extra comma",
+  "numbers": {
+    "valid_number": 42,
+    "invalid_number": 42.5.7,
+    "malformed_scientific": 1.23e+
+  },
+  "arrays": [
+    "valid_element",
+    "missing_closing_bracket"
+  ],
+  "objects": {
+    "nested": {
+      "incomplete": "This object is not properly closed"
+
+  }
+}

@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <application>
+        <name>GOX Framework Example</name>
+        <version>1.0.0</version>
+        <description>Simple XML configuration for testing XML analyzer</description>
+    </application>
+
+    <database>
+        <host>localhost</host>
+        <port>5432</port>
+        <name>gox_db</name>
+        <credentials>
+            <username>gox_user</username>
+            <password>secret123</password>
+        </credentials>
+        <pool>
+            <min_connections>5</min_connections>
+            <max_connections>50</max_connections>
+            <timeout>30</timeout>
+        </pool>
+    </database>
+
+    <agents>
+        <agent id="analyzer-001" type="binary_analyzer">
+            <config>
+                <deep_scan>true</deep_scan>
+                <extract_strings>true</extract_strings>
+                <max_file_size>50MB</max_file_size>
+            </config>
+            <capabilities>
+                <capability>file_analysis</capability>
+                <capability>string_extraction</capability>
+                <capability>security_scanning</capability>
+            </capabilities>
+        </agent>
+
+        <agent id="processor-001" type="json_analyzer">
+            <config>
+                <validate_syntax>true</validate_syntax>
+                <validate_schema>true</validate_schema>
+                <pretty_print>false</pretty_print>
+            </config>
+            <capabilities>
+                <capability>json_validation</capability>
+                <capability>schema_checking</capability>
+            </capabilities>
+        </agent>
+    </agents>
+
+    <logging>
+        <level>info</level>
+        <output>file</output>
+        <path>/var/log/gox/application.log</path>
+        <rotation>
+            <size>100MB</size>
+            <count>10</count>
+        </rotation>
+    </logging>
+</configuration>

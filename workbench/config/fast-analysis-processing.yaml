@@ -1,0 +1,54 @@
+# Fast content analysis cell (optimized for speed)
+cell:
+  id: "processing:fast-analysis"
+  description: "Fast content analysis with reduced features for high-throughput scenarios"
+  debug: false
+
+  orchestration:
+    startup_timeout: "15s"
+    shutdown_timeout: "10s"
+    max_retries: 1
+    retry_delay: "5s"
+    health_check_interval: "20s"
+
+  agents:
+    # Fast text analysis
+    - id: "text-analyzer-fast-001"
+      agent_type: "text-analyzer"
+      ingress: "sub:fast-analysis-text"
+      egress: "pub:fast-analyzed-text"
+      dependencies: []
+      config:
+        enable_nlp: false
+        enable_sentiment: false
+        enable_keywords: true
+        max_lines: 1000
+        max_keywords: 10
+
+    # Fast JSON analysis
+    - id: "json-analyzer-fast-001"
+      agent_type: "json-analyzer"
+      ingress: "sub:fast-analysis-json"
+      egress: "pub:fast-analyzed-json"
+      dependencies: []
+      config:
+        enable_validation: true
+        enable_schema_gen: false
+        enable_key_analysis: false
+        max_depth: 10
+        max_keys: 100
+        enable_minification: true
+
+    # Fast binary analysis
+    - id: "binary-analyzer-fast-001"
+      agent_type: "binary-analyzer"
+      ingress: "sub:fast-analysis-binary"
+      egress: "pub:fast-analyzed-binary"
+      dependencies: []
+      config:
+        enable_hashing: true
+        enable_entropy: false
+        enable_magic_bytes: true
+        max_analysis_size: 1048576  # 1MB
+        enable_structural: false
+        enable_compression: false

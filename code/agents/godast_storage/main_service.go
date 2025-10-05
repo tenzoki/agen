@@ -8,9 +8,9 @@ import (
 	"os"
 	"time"
 
-	"github.com/agen/omni/public/omnistore"
-	"github.com/agen/cellorg/internal/agent"
-	"github.com/agen/cellorg/internal/client"
+	"github.com/tenzoki/agen/omni/public/omnistore"
+	"github.com/tenzoki/agen/cellorg/public/agent"
+	"github.com/tenzoki/agen/cellorg/public/client"
 )
 
 // StorageServiceAgent implements HTTP service mode for storage operations

@@ -9,9 +9,9 @@ import (
 	"github.com/dgraph-io/badger/v4"
 	"github.com/google/uuid"
 
-	"github.com/agen/omni/internal/graph"
-	"github.com/agen/omni/internal/kv"
-	"github.com/agen/omni/internal/storage"
+	"github.com/tenzoki/agen/omni/internal/graph"
+	"github.com/tenzoki/agen/omni/internal/kv"
+	"github.com/tenzoki/agen/omni/internal/storage"
 )
 
 // graphTransaction implements the GraphTx interface

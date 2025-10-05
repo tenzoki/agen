@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <!-- This XML has intentional errors for testing malformed XML handling -->
+
+    <application>
+        <name>Malformed XML Example</name>
+        <version>1.0.0</version>
+        <!-- Unclosed tag below -->
+        <description>This XML has syntax errors
+    </application>
+
+    <!-- Invalid nesting -->
+    <database>
+        <host>localhost</host>
+        <credentials>
+            <username>user</username>
+        </database>
+        <password>secret</password>
+        </credentials>
+
+    <!-- Missing closing tag for 'settings' -->
+    <settings>
+        <debug>true</debug>
+        <timeout>30</timeout>
+
+    <!-- Invalid character in tag name -->
+    <invalid-char@>value</invalid-char@>
+
+    <!-- Duplicate attribute -->
+    <agent id="001" id="002">
+        <type>analyzer</type>
+    </agent>
+
+    <!-- Unescaped special characters -->
+    <content>This & that < > " '</content>
+
+    <!-- Missing closing tag for configuration -->

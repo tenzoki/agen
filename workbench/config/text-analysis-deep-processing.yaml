@@ -1,0 +1,26 @@
+# Specialized text analysis cell
+cell:
+  id: "processing:text-analysis-deep"
+  description: "Deep text analysis with NLP and advanced features"
+  debug: true
+
+  orchestration:
+    startup_timeout: "45s"
+    shutdown_timeout: "20s"
+    max_retries: 3
+    retry_delay: "15s"
+    health_check_interval: "40s"
+
+  agents:
+    # Deep text analysis with all features
+    - id: "text-analyzer-deep-001"
+      agent_type: "text-analyzer"
+      ingress: "sub:deep-text-analysis"
+      egress: "pub:deep-analyzed-text"
+      dependencies: []
+      config:
+        enable_nlp: true
+        enable_sentiment: true
+        enable_keywords: true
+        max_lines: 50000
+        max_keywords: 50

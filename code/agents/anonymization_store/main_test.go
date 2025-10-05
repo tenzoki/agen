@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/agen/cellorg/internal/client"
+	"github.com/tenzoki/agen/cellorg/public/client"
 )
 
 func TestStorageOperations(t *testing.T) {
@@ -55,7 +55,9 @@ func TestStorageOperations(t *testing.T) {
 			t.Errorf("Expected pseudonym PERSON_123456, got %v", setReq.Value["pseudonym"])
 		}
 
-		t.Logf("Set request payload: %s", string(setMsg.Payload))
+		if payload, ok := setMsg.Payload.([]byte); ok {
+			t.Logf("Set request payload: %s", string(payload))
+		}
 	})
 
 	t.Run("Reverse Mapping", func(t *testing.T) {
@@ -74,7 +76,9 @@ func TestStorageOperations(t *testing.T) {
 			t.Errorf("Expected operation 'get', got %s", reverseReq.Operation)
 		}
 
-		t.Logf("Reverse lookup payload: %s", string(reverseMsg.Payload))
+		if payload, ok := reverseMsg.Payload.([]byte); ok {
+			t.Logf("Reverse lookup payload: %s", string(payload))
+		}
 	})
 
 	t.Run("List Mappings with Prefix", func(t *testing.T) {
@@ -93,7 +97,9 @@ func TestStorageOperations(t *testing.T) {
 			t.Errorf("Expected operation 'list', got %s", listReq.Operation)
 		}
 
-		t.Logf("List request payload: %s", string(listMsg.Payload))
+		if payload, ok := listMsg.Payload.([]byte); ok {
+			t.Logf("List request payload: %s", string(payload))
+		}
 	})
 
 	t.Run("Delete Mapping (Soft Delete)", func(t *testing.T) {
@@ -112,7 +118,9 @@ func TestStorageOperations(t *testing.T) {
 			t.Errorf("Expected operation 'delete', got %s", deleteReq.Operation)
 		}
 
-		t.Logf("Delete request payload: %s", string(deleteMsg.Payload))
+		if payload, ok := deleteMsg.Payload.([]byte); ok {
+			t.Logf("Delete request payload: %s", string(payload))
+		}
 	})
 }
 

@@ -1,0 +1,41 @@
+# Large Text File for Chunking Tests
+
+This is a large text file designed to test file splitting and chunking capabilities of the GOX Framework.
+
+Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
+
+Curabitur pretium tincidunt lacus. Nulla gravida orci a odio. Nullam varius turpis et commodo pharetra. Integer nec mi elit. Quisque vulputate tellus sit amet vulputate. Pellentesque habitant morbi tristique senectus et netus et malesuada fames ac turpis egestas. Maecenas sed diam eget risus varius blandit sit amet non magna.
+
+Vestibulum ante ipsum primis in faucibus orci luctus et ultrices posuere cubilia curae; Mauris viverra veniam sit amet lacus cursus posuere. Phasellus ullamcorper ipsum rutrum nunc. Nunc nonummy metus. Vestibulum volutpat pretium libero. Cras id dui. Aenean ut eros et nisl sagittis vestibulum.
+
+Nullam nulla eros, ultricies sit amet, nonummy id, imperdiet feugiat, pede. Sed lectus. Donec mollis hendrerit risus. Phasellus nec sem in justo pellentesque facilisis. Etiam imperdiet imperdiet orci. Nunc nec neque. Phasellus leo dolor, tempus non, auctor et, hendrerit quis, nisi.
+
+Sed diam nonummy nibh euismod tincidunt ut laoreet dolore magna aliquam erat volutpat. Ut wisi enim ad minim veniam, quis nostrud exerci tation ullamcorper suscipit lobortis nisl ut aliquip ex ea commodo consequat. Duis autem vel eum iriure dolor in hendrerit in vulputate velit esse molestie consequat.
+
+Fusce tellus odio, dapibus id, fermentum quis, tincidunt eu, mauris. Vestibulum sed magna at nunc commodo placerat praesent blandit. Nam nulla quam, gravida non, commodo a, sodales sit amet, nisi. Pellentesque fermentum dolor. Aliquam quam lectus, facilisis auctor, ultrices ut, elementum vulputate, nunc.
+
+This text continues with repeated patterns to create a file large enough to trigger chunking algorithms. The content includes various types of data:
+
+1. Plain text paragraphs
+2. Numbered lists
+3. Special characters: áéíóú, ñ, ç, ß, ü
+4. Numbers: 123, 456.789, 3.14159
+5. Dates: 2024-09-26, September 26th, 2024
+6. URLs: https://example.com/path?param=value
+7. Email addresses: test@example.com
+8. JSON-like structures: {"key": "value", "number": 42}
+
+The purpose of this file is to provide sufficient content for testing:
+- File splitting algorithms
+- Chunk processing capabilities
+- Text analysis on large documents
+- Memory management during processing
+- Streaming text analysis
+
+Additional content follows to ensure the file reaches a substantial size for meaningful chunking tests. This text is intentionally repetitive to simulate real-world scenarios where large documents may contain similar patterns or repeated sections.
+
+Each paragraph represents a potential chunk boundary, and the varied content types ensure that chunking algorithms can be tested against different text structures and patterns. The file should be large enough to create multiple chunks while remaining manageable for test environments.
+
+Content continues with more paragraphs to reach the desired file size for chunking tests. Real-world documents often contain mixed content types, varying paragraph lengths, and different structural elements that chunking algorithms must handle gracefully.
+
+This concludes the large text file for chunking and splitting tests in the GOX Framework.

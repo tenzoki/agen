@@ -1,3 +1,5 @@
+//go:build ignore
+
 package main
 
 import (
@@ -6,8 +8,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/agen/omni/internal/kv"
-	"github.com/agen/omni/internal/storage"
+	"github.com/tenzoki/agen/omni/internal/kv"
+	"github.com/tenzoki/agen/omni/internal/storage"
 )
 
 func main() {

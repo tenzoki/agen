@@ -1,3 +1,5 @@
+//go:build ignore
+
 package main
 
 import (
@@ -7,7 +9,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/agen/omni/internal/filestore"
+	"github.com/tenzoki/agen/omni/internal/filestore"
 )
 
 func main() {

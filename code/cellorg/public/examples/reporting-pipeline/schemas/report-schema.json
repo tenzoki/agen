@@ -1,0 +1,398 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "GOX Report Schema",
+  "description": "Schema for GOX Framework generated reports",
+  "type": "object",
+  "properties": {
+    "report_metadata": {
+      "type": "object",
+      "properties": {
+        "report_id": {
+          "type": "string",
+          "description": "Unique identifier for the report"
+        },
+        "generated_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp when the report was generated"
+        },
+        "generator_version": {
+          "type": "string",
+          "description": "Version of the report generator"
+        },
+        "report_type": {
+          "type": "string",
+          "enum": ["executive", "technical", "summary", "detailed"],
+          "description": "Type of report generated"
+        },
+        "data_sources": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "List of data sources used in the report"
+        }
+      },
+      "required": ["report_id", "generated_at", "report_type"]
+    },
+    "executive_summary": {
+      "type": "object",
+      "properties": {
+        "overview": {
+          "type": "string",
+          "description": "High-level overview of findings"
+        },
+        "key_metrics": {
+          "type": "object",
+          "properties": {
+            "total_items_processed": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "success_rate": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100
+            },
+            "processing_time": {
+              "type": "number",
+              "description": "Total processing time in seconds"
+            }
+          }
+        },
+        "critical_findings": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "severity": {
+                "type": "string",
+                "enum": ["low", "medium", "high", "critical"]
+              },
+              "title": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "impact": {
+                "type": "string"
+              },
+              "recommendation": {
+                "type": "string"
+              }
+            },
+            "required": ["severity", "title", "description"]
+          }
+        }
+      },
+      "required": ["overview"]
+    },
+    "detailed_findings": {
+      "type": "object",
+      "properties": {
+        "security_analysis": {
+          "type": "object",
+          "properties": {
+            "threats_detected": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "vulnerability_count": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "risk_level": {
+              "type": "string",
+              "enum": ["low", "medium", "high", "critical"]
+            },
+            "security_recommendations": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "performance_analysis": {
+          "type": "object",
+          "properties": {
+            "throughput": {
+              "type": "number",
+              "description": "Processing throughput (items/second)"
+            },
+            "latency": {
+              "type": "object",
+              "properties": {
+                "average": {
+                  "type": "number"
+                },
+                "p95": {
+                  "type": "number"
+                },
+                "p99": {
+                  "type": "number"
+                }
+              }
+            },
+            "resource_utilization": {
+              "type": "object",
+              "properties": {
+                "cpu_avg": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 100
+                },
+                "memory_peak": {
+                  "type": "string"
+                },
+                "disk_io": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "quality_analysis": {
+          "type": "object",
+          "properties": {
+            "data_integrity": {
+              "type": "string",
+              "enum": ["passed", "failed", "partial"]
+            },
+            "completeness_score": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100
+            },
+            "accuracy_score": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100
+            },
+            "quality_issues": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "issue_type": {
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "affected_items": {
+                    "type": "integer"
+                  },
+                  "severity": {
+                    "type": "string",
+                    "enum": ["low", "medium", "high"]
+                  }
+                },
+                "required": ["issue_type", "description", "affected_items"]
+              }
+            }
+          }
+        }
+      }
+    },
+    "statistics": {
+      "type": "object",
+      "properties": {
+        "processing_statistics": {
+          "type": "object",
+          "properties": {
+            "total_files": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "successful_processes": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "failed_processes": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "warnings_generated": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "errors_encountered": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        },
+        "file_type_breakdown": {
+          "type": "object",
+          "patternProperties": {
+            "^[a-zA-Z0-9_-]+$": {
+              "type": "object",
+              "properties": {
+                "count": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "percentage": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 100
+                },
+                "average_size": {
+                  "type": "integer"
+                },
+                "processing_time": {
+                  "type": "number"
+                }
+              }
+            }
+          }
+        },
+        "temporal_analysis": {
+          "type": "object",
+          "properties": {
+            "processing_start": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "processing_end": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "peak_processing_time": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "hourly_breakdown": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "hour": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 23
+                  },
+                  "files_processed": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "errors": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "recommendations": {
+      "type": "object",
+      "properties": {
+        "immediate_actions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "priority": {
+                "type": "string",
+                "enum": ["low", "medium", "high", "critical"]
+              },
+              "action": {
+                "type": "string"
+              },
+              "rationale": {
+                "type": "string"
+              },
+              "estimated_effort": {
+                "type": "string"
+              }
+            },
+            "required": ["priority", "action"]
+          }
+        },
+        "optimization_opportunities": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "area": {
+                "type": "string"
+              },
+              "current_performance": {
+                "type": "string"
+              },
+              "potential_improvement": {
+                "type": "string"
+              },
+              "implementation_complexity": {
+                "type": "string",
+                "enum": ["low", "medium", "high"]
+              }
+            },
+            "required": ["area", "potential_improvement"]
+          }
+        },
+        "long_term_strategies": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "appendices": {
+      "type": "object",
+      "properties": {
+        "detailed_logs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "timestamp": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "level": {
+                "type": "string",
+                "enum": ["DEBUG", "INFO", "WARN", "ERROR"]
+              },
+              "message": {
+                "type": "string"
+              },
+              "component": {
+                "type": "string"
+              }
+            },
+            "required": ["timestamp", "level", "message"]
+          }
+        },
+        "configuration_used": {
+          "type": "object",
+          "description": "Configuration parameters used during processing"
+        },
+        "data_samples": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "sample_id": {
+                "type": "string"
+              },
+              "data_type": {
+                "type": "string"
+              },
+              "excerpt": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "required": ["report_metadata", "executive_summary"]
+}

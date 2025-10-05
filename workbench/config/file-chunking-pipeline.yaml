@@ -1,0 +1,66 @@
+# Advanced File Chunking Pipeline
+cell:
+  id: "pipeline:file-chunking"
+  description: "Complete file chunking pipeline with splitting, processing, and synthesis"
+  debug: true
+
+  orchestration:
+    startup_timeout: "60s"
+    shutdown_timeout: "30s"
+    max_retries: 3
+    retry_delay: "10s"
+    health_check_interval: "20s"
+
+  agents:
+    - id: "file-ingester-chunking-001"
+      agent_type: "file-ingester"
+      ingress: "file:examples/chunking-pipeline/input/*.*"
+      egress: "pub:source-files"
+      dependencies: []
+      config:
+        digest: false
+        watch_interval_seconds: 5
+
+    - id: "file-splitter-001"
+      agent_type: "file-splitter"
+      ingress: "sub:source-files"
+      egress: "pub:file-chunks"
+      dependencies: ["file-ingester-chunking-001"]
+      config:
+        default_chunk_size: 10485760  # 10MB
+        split_strategy: "semantic"
+        overlap_size: 512
+        temp_dir: "/tmp/gox-chunks"
+
+    - id: "chunk-processor-001"
+      agent_type: "chunk-processor"
+      ingress: "sub:file-chunks"
+      egress: "pub:processed-chunks"
+      dependencies: ["file-splitter-001"]
+      config:
+        processor_type: "text_processor"
+        enable_keywords: true
+        enable_sentiment: true
+        worker_pool_size: 4
+        job_timeout: "5m"
+
+    - id: "chunk-synthesizer-001"
+      agent_type: "chunk-synthesizer"
+      ingress: "sub:processed-chunks"
+      egress: "pub:synthesis-results"
+      dependencies: ["chunk-processor-001"]
+      config:
+        synthesis_type: "document_summary"
+        max_keywords: 50
+        include_charts: true
+        output_format: "json"
+
+    - id: "file-writer-synthesis-001"
+      agent_type: "file-writer"
+      ingress: "sub:synthesis-results"
+      egress: "file:examples/chunking-pipeline/output/synthesis_{{.document_hash}}_{{.timestamp}}.json"
+      dependencies: ["chunk-synthesizer-001"]
+      config:
+        output_format: "json"
+        create_directories: true
+        preserve_metadata: true

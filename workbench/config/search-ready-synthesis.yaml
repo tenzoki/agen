@@ -1,0 +1,44 @@
+# Search-Ready Synthesis Cell
+cell:
+  id: "synthesis:search-ready"
+  description: "Optimized pipeline for search and discovery use cases"
+  debug: true
+
+  orchestration:
+    startup_timeout: "30s"
+    shutdown_timeout: "20s"
+    max_retries: 2
+    health_check_interval: "15s"
+    execution_order: ["summary-agent", "indexer-agent"]
+
+  agents:
+    - id: "summary-agent"
+      agent_type: "summary-generator"
+      dependencies: []
+      ingress:
+        channels: ["synthesis_request"]
+      egress:
+        channels: ["summary_for_search"]
+      config:
+        max_keywords: 40
+        max_topics: 20
+        summary_length: 500
+        enable_sections: false  # Simplified for search
+
+    - id: "indexer-agent"
+      agent_type: "search-indexer"
+      dependencies: []
+      ingress:
+        channels: ["synthesis_request"]
+      egress:
+        channels: ["search_index_ready"]
+      config:
+        max_terms: 20000
+        min_term_frequency: 1
+        calculate_positions: true
+        index_format: "json"
+        score_threshold: 0.01  # Lower threshold for comprehensive indexing
+
+  environment:
+    GOX_LOG_LEVEL: "info"
+    GOX_SEARCH_OPTIMIZATION: "true"

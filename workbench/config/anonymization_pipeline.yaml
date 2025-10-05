@@ -1,0 +1,84 @@
+# Anonymization Pipeline Cell
+# Provides multilingual NER, persistent pseudonymization with storage backend
+# Suitable for GDPR-compliant document processing with PII detection
+
+cell:
+  id: "pipeline:anonymization"
+  description: "PII anonymization pipeline with NER, persistent mappings, and VFS isolation"
+  debug: true
+
+  orchestration:
+    startup_timeout: "90s"    # NER model loading takes time
+    shutdown_timeout: "30s"
+    max_retries: 3
+    retry_delay: "10s"
+    health_check_interval: "30s"
+
+  agents:
+    # Storage Backend - Persistent anonymization mappings
+    # Uses godast/omnistore with bbolt backend
+    # Provides: forward (original→pseudonym) and reverse (pseudonym→original) lookups
+    - id: "anonymization-store-001"
+      agent_type: "anonymization-store"
+      dependencies: []
+      ingress: "sub:storage-requests"
+      egress: "pub:storage-responses"
+      config:
+        data_path: "/tmp/gox-anonymization-store"
+        max_file_size: 104857600  # 100MB
+        enable_debug: true
+
+    # NER Agent - Named Entity Recognition using ONNXRuntime
+    # Model: XLM-RoBERTa (multilingual)
+    # Detects: PERSON, ORG, LOC, MISC entities
+    - id: "ner-agent-001"
+      agent_type: "ner-agent"
+      dependencies: []
+      ingress: "sub:ner-requests"
+      egress: "pub:detected-entities"
+      config:
+        model_path: "models/ner/xlm-roberta-ner.onnx"
+        tokenizer_path: "models/ner/"
+        max_seq_length: 128
+        confidence_threshold: 0.5
+        enable_debug: true
+
+    # Anonymizer Agent - Pseudonymization with persistent storage
+    # Generates deterministic pseudonyms (SHA256-based)
+    # Stores forward and reverse mappings in storage agent
+    - id: "anonymizer-001"
+      agent_type: "anonymizer"
+      dependencies: ["anonymization-store-001", "ner-agent-001"]
+      ingress: "sub:anonymization-requests"
+      egress: "pub:anonymized-documents"
+      config:
+        storage_agent_id: "anonymization-store-001"
+        pipeline_version: "v1.0"
+        enable_debug: true
+        timeout_seconds: 30
+
+  environment:
+    GOX_LOG_LEVEL: "info"
+    GOX_DEBUG: "true"
+    # ONNXRuntime environment variables (macOS)
+    CGO_CFLAGS: "-I/opt/homebrew/include"
+    CGO_LDFLAGS: "-L/opt/homebrew/lib -lonnxruntime"
+    DYLD_LIBRARY_PATH: "/opt/homebrew/lib"
+
+# Usage:
+# 1. Ensure ONNXRuntime is installed (see models/README.md)
+# 2. Convert models: cd models && python download_and_convert.py
+# 3. Start pipeline: gox start config/anonymization_pipeline.yaml
+# 4. Send request to "anonymization-requests" topic with:
+#    {
+#      "text": "Angela Merkel visited Berlin.",
+#      "entities": [...],  # Optional - NER will detect if missing
+#      "project_id": "project-a"
+#    }
+# 5. Receive anonymized text from "anonymized-documents" topic
+
+# Notes:
+# - Project-level isolation: Each project gets separate mappings
+# - Persistent mappings: Same entity always maps to same pseudonym
+# - Bidirectional: Can reverse pseudonymize if needed
+# - GDPR-compliant: Soft delete with audit trail

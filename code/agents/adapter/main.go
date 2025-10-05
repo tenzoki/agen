@@ -35,8 +35,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/agen/cellorg/internal/agent"
-	"github.com/agen/cellorg/internal/client"
+	"github.com/tenzoki/agen/cellorg/public/agent"
+	"github.com/tenzoki/agen/cellorg/public/client"
 )
 
 // Adapter implements schema mapping and data transformation services.

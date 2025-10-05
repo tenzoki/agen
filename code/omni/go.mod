@@ -1,4 +1,4 @@
-module github.com/agen/omni
+module github.com/tenzoki/agen/omni
 
 go 1.24.3
 

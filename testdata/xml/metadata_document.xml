@@ -1,0 +1,125 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<document xmlns="http://example.com/schema/document" version="1.0">
+    <metadata>
+        <title>Sample XML Document for Testing</title>
+        <author>
+            <name>Test Author</name>
+            <email>author@example.com</email>
+            <affiliation>Research Institute</affiliation>
+        </author>
+        <created_date>2024-09-27T10:00:00Z</created_date>
+        <modified_date>2024-09-27T12:30:00Z</modified_date>
+        <version>1.2</version>
+        <language>en</language>
+        <keywords>
+            <keyword>XML</keyword>
+            <keyword>testing</keyword>
+            <keyword>metadata</keyword>
+            <keyword>parsing</keyword>
+        </keywords>
+        <classification>
+            <category>technical</category>
+            <subcategory>documentation</subcategory>
+            <confidence>0.95</confidence>
+        </classification>
+    </metadata>
+
+    <content>
+        <section id="introduction" level="1">
+            <heading>Introduction</heading>
+            <paragraph id="intro_p1">
+                This document serves as a comprehensive example of XML structure for testing various parsing and analysis capabilities. It includes multiple nested elements, attributes, and different types of content.
+            </paragraph>
+            <paragraph id="intro_p2">
+                The structure demonstrates common patterns found in technical documentation, including metadata, hierarchical sections, lists, and embedded data.
+            </paragraph>
+        </section>
+
+        <section id="features" level="1">
+            <heading>XML Features Demonstrated</heading>
+            <subsection id="elements" level="2">
+                <heading>Element Types</heading>
+                <list type="unordered">
+                    <item>Simple text elements</item>
+                    <item>Elements with attributes</item>
+                    <item>Nested complex structures</item>
+                    <item>Mixed content elements</item>
+                </list>
+            </subsection>
+
+            <subsection id="attributes" level="2">
+                <heading>Attribute Usage</heading>
+                <paragraph>
+                    This document demonstrates various attribute patterns including:
+                    <emphasis type="bold">identifiers</emphasis>,
+                    <emphasis type="italic">classifications</emphasis>, and
+                    <reference target="external" url="http://example.com">external references</reference>.
+                </paragraph>
+            </subsection>
+        </section>
+
+        <section id="data" level="1">
+            <heading>Embedded Data</heading>
+            <data_table id="sample_data">
+                <headers>
+                    <header>Name</header>
+                    <header>Value</header>
+                    <header>Type</header>
+                </headers>
+                <rows>
+                    <row id="row1">
+                        <cell>Temperature</cell>
+                        <cell>23.5</cell>
+                        <cell>float</cell>
+                    </row>
+                    <row id="row2">
+                        <cell>Humidity</cell>
+                        <cell>65</cell>
+                        <cell>integer</cell>
+                    </row>
+                    <row id="row3">
+                        <cell>Status</cell>
+                        <cell>active</cell>
+                        <cell>string</cell>
+                    </row>
+                </rows>
+            </data_table>
+        </section>
+
+        <section id="multilingual" level="1">
+            <heading>Multilingual Content</heading>
+            <paragraph xml:lang="en">This is content in English.</paragraph>
+            <paragraph xml:lang="es">Este es contenido en español.</paragraph>
+            <paragraph xml:lang="fr">Ceci est du contenu en français.</paragraph>
+        </section>
+
+        <section id="special_chars" level="1">
+            <heading>Special Characters and Encoding</heading>
+            <paragraph>
+                This section contains various special characters:
+                &lt; &gt; &amp; &quot; &apos;
+                Unicode characters: α β γ δ ε
+                Mathematical symbols: ∑ ∏ ∆ ∇ ∞
+                Currency: $ € £ ¥ ₹
+            </paragraph>
+        </section>
+    </content>
+
+    <appendix>
+        <notes>
+            <note id="note1" type="warning">
+                This is a test document and should not be used in production.
+            </note>
+            <note id="note2" type="info">
+                The structure follows standard XML best practices for documentation.
+            </note>
+        </notes>
+
+        <validation>
+            <schema_version>1.0</schema_version>
+            <validation_date>2024-09-27T12:00:00Z</validation_date>
+            <valid>true</valid>
+            <validator>XMLValidator v2.1</validator>
+        </validation>
+    </appendix>
+</document>

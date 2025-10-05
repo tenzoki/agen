@@ -1,11 +1,12 @@
 package graph
 
 import (
+	"fmt"
 	"strings"
 	"time"
 
-	"github.com/agen/omni/internal/common"
-	"github.com/agen/omni/internal/storage"
+	"github.com/tenzoki/agen/omni/internal/common"
+	"github.com/tenzoki/agen/omni/internal/storage"
 )
 
 // GraphStore defines the interface for graph database operations
@@ -17,11 +18,24 @@ type GraphStore interface {
 	DeleteVertex(id string) error
 	VertexExists(id string) (bool, error)
 
+	// Vertex operations with transaction
+	AddVertexInTx(tx storage.Transaction, vertex *common.Vertex) error
+	GetVertexInTx(tx storage.Transaction, id string) (*common.Vertex, error)
+	UpdateVertexInTx(tx storage.Transaction, vertex *common.Vertex) error
+	DeleteVertexInTx(tx storage.Transaction, id string) error
+	VertexExistsInTx(tx storage.Transaction, id string) (bool, error)
+
 	// Edge operations
 	AddEdge(edge *common.Edge) error
 	GetEdge(edgeID string) (*common.Edge, error)
 	DeleteEdge(edgeID string) error
 	EdgeExists(edgeID string) (bool, error)
+
+	// Edge operations with transaction
+	AddEdgeInTx(tx storage.Transaction, edge *common.Edge) error
+	GetEdgeInTx(tx storage.Transaction, edgeID string) (*common.Edge, error)
+	DeleteEdgeInTx(tx storage.Transaction, edgeID string) error
+	EdgeExistsInTx(tx storage.Transaction, edgeID string) (bool, error)
 
 	// Query operations
 	GetVerticesByType(vertexType string, limit int) ([]*common.Vertex, error)
@@ -89,9 +103,37 @@ func (gs *graphStore) AddVertex(vertex *common.Vertex) error {
 	return gs.crudManager.StoreVertex(vertex)
 }
 
+// AddVertexInTx adds a new vertex using the provided transaction
+func (gs *graphStore) AddVertexInTx(tx storage.Transaction, vertex *common.Vertex) error {
+	return gs.crudManager.StoreVertexInTx(tx, vertex)
+}
+
 // GetVertex retrieves a vertex by its ID
 func (gs *graphStore) GetVertex(id string) (*common.Vertex, error) {
 	return gs.crudManager.GetVertex(id)
+}
+
+// GetVertexInTx retrieves a vertex using the provided transaction
+func (gs *graphStore) GetVertexInTx(tx storage.Transaction, id string) (*common.Vertex, error) {
+	if err := common.ValidateKey(id); err != nil {
+		return nil, fmt.Errorf("invalid vertex ID: %w", err)
+	}
+
+	key := common.NewKeyBuilder().VertexKey(id)
+	data, err := tx.Get(key)
+	if err == storage.ErrKeyNotFound {
+		return nil, common.ErrVertexNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	vertex := &common.Vertex{}
+	if err := vertex.UnmarshalBinary(data); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal vertex: %w", err)
+	}
+
+	return vertex, nil
 }
 
 // UpdateVertex updates an existing vertex
@@ -99,9 +141,19 @@ func (gs *graphStore) UpdateVertex(vertex *common.Vertex) error {
 	return gs.crudManager.UpdateVertex(vertex)
 }
 
+// UpdateVertexInTx updates an existing vertex using the provided transaction
+func (gs *graphStore) UpdateVertexInTx(tx storage.Transaction, vertex *common.Vertex) error {
+	return gs.crudManager.UpdateVertexInTx(tx, vertex)
+}
+
 // DeleteVertex removes a vertex from the graph
 func (gs *graphStore) DeleteVertex(id string) error {
 	return gs.crudManager.DeleteVertex(id)
+}
+
+// DeleteVertexInTx removes a vertex using the provided transaction
+func (gs *graphStore) DeleteVertexInTx(tx storage.Transaction, id string) error {
+	return gs.crudManager.DeleteVertexInTx(tx, id)
 }
 
 // VertexExists checks if a vertex exists
@@ -116,9 +168,26 @@ func (gs *graphStore) VertexExists(id string) (bool, error) {
 	return true, nil
 }
 
+// VertexExistsInTx checks if a vertex exists using the provided transaction
+func (gs *graphStore) VertexExistsInTx(tx storage.Transaction, id string) (bool, error) {
+	_, err := gs.GetVertexInTx(tx, id)
+	if err == common.ErrVertexNotFound {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
 // AddEdge adds a new edge to the graph
 func (gs *graphStore) AddEdge(edge *common.Edge) error {
 	return gs.crudManager.StoreEdge(edge)
+}
+
+// AddEdgeInTx adds a new edge using the provided transaction
+func (gs *graphStore) AddEdgeInTx(tx storage.Transaction, edge *common.Edge) error {
+	return gs.crudManager.StoreEdgeInTx(tx, edge)
 }
 
 // GetEdge retrieves an edge by its ID
@@ -126,14 +195,54 @@ func (gs *graphStore) GetEdge(edgeID string) (*common.Edge, error) {
 	return gs.crudManager.GetEdge(edgeID)
 }
 
+// GetEdgeInTx retrieves an edge using the provided transaction
+func (gs *graphStore) GetEdgeInTx(tx storage.Transaction, edgeID string) (*common.Edge, error) {
+	if err := common.ValidateKey(edgeID); err != nil {
+		return nil, fmt.Errorf("invalid edge ID: %w", err)
+	}
+
+	key := common.NewKeyBuilder().EdgeKey(edgeID)
+	data, err := tx.Get(key)
+	if err == storage.ErrKeyNotFound {
+		return nil, common.ErrEdgeNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	edge := &common.Edge{}
+	if err := edge.UnmarshalBinary(data); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal edge: %w", err)
+	}
+
+	return edge, nil
+}
+
 // DeleteEdge removes an edge from the graph
 func (gs *graphStore) DeleteEdge(edgeID string) error {
 	return gs.crudManager.DeleteEdge(edgeID)
 }
 
+// DeleteEdgeInTx removes an edge using the provided transaction
+func (gs *graphStore) DeleteEdgeInTx(tx storage.Transaction, edgeID string) error {
+	return gs.crudManager.DeleteEdgeInTx(tx, edgeID)
+}
+
 // EdgeExists checks if an edge exists
 func (gs *graphStore) EdgeExists(edgeID string) (bool, error) {
 	_, err := gs.crudManager.GetEdge(edgeID)
+	if err == common.ErrEdgeNotFound {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+// EdgeExistsInTx checks if an edge exists using the provided transaction
+func (gs *graphStore) EdgeExistsInTx(tx storage.Transaction, edgeID string) (bool, error) {
+	_, err := gs.GetEdgeInTx(tx, edgeID)
 	if err == common.ErrEdgeNotFound {
 		return false, nil
 	}

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/agen/omni/internal/common"
+	"github.com/tenzoki/agen/omni/internal/common"
 )
 
 type CRUDManager struct {
@@ -21,6 +21,7 @@ func NewCRUDManager(store Store) *CRUDManager {
 	}
 }
 
+// StoreVertex stores a vertex, creating its own transaction
 func (cm *CRUDManager) StoreVertex(vertex *common.Vertex) error {
 	if err := vertex.Validate(); err != nil {
 		return fmt.Errorf("vertex validation failed: %w", err)
@@ -33,24 +34,44 @@ func (cm *CRUDManager) StoreVertex(vertex *common.Vertex) error {
 	}
 
 	return cm.store.Update(func(tx Transaction) error {
-		exists, err := tx.Exists(key)
-		if err != nil {
-			return err
-		}
-		if exists {
-			return common.ErrDuplicateVertex
-		}
-
-		if err := tx.Set(key, data); err != nil {
-			return err
-		}
-
-		if err := cm.createVertexIndices(tx, vertex); err != nil {
-			return fmt.Errorf("failed to create vertex indices: %w", err)
-		}
-
-		return nil
+		return cm.storeVertexInTx(tx, vertex, key, data)
 	})
+}
+
+// StoreVertexInTx stores a vertex using the provided transaction
+func (cm *CRUDManager) StoreVertexInTx(tx Transaction, vertex *common.Vertex) error {
+	if err := vertex.Validate(); err != nil {
+		return fmt.Errorf("vertex validation failed: %w", err)
+	}
+
+	key := cm.keyBuilder.VertexKey(vertex.ID)
+	data, err := vertex.MarshalBinary()
+	if err != nil {
+		return fmt.Errorf("failed to marshal vertex: %w", err)
+	}
+
+	return cm.storeVertexInTx(tx, vertex, key, data)
+}
+
+// storeVertexInTx is the internal implementation
+func (cm *CRUDManager) storeVertexInTx(tx Transaction, vertex *common.Vertex, key []byte, data []byte) error {
+	exists, err := tx.Exists(key)
+	if err != nil {
+		return err
+	}
+	if exists {
+		return common.ErrDuplicateVertex
+	}
+
+	if err := tx.Set(key, data); err != nil {
+		return err
+	}
+
+	if err := cm.createVertexIndices(tx, vertex); err != nil {
+		return fmt.Errorf("failed to create vertex indices: %w", err)
+	}
+
+	return nil
 }
 
 func (cm *CRUDManager) GetVertex(vertexID string) (*common.Vertex, error) {
@@ -75,6 +96,7 @@ func (cm *CRUDManager) GetVertex(vertexID string) (*common.Vertex, error) {
 	return vertex, nil
 }
 
+// UpdateVertex updates a vertex, creating its own transaction
 func (cm *CRUDManager) UpdateVertex(vertex *common.Vertex) error {
 	if err := vertex.Validate(); err != nil {
 		return fmt.Errorf("vertex validation failed: %w", err)
@@ -83,48 +105,64 @@ func (cm *CRUDManager) UpdateVertex(vertex *common.Vertex) error {
 	key := cm.keyBuilder.VertexKey(vertex.ID)
 
 	return cm.store.Update(func(tx Transaction) error {
-		exists, err := tx.Exists(key)
-		if err != nil {
-			return err
-		}
-		if !exists {
-			return common.ErrVertexNotFound
-		}
-
-		oldData, err := tx.Get(key)
-		if err != nil {
-			return err
-		}
-
-		oldVertex := &common.Vertex{}
-		if err := oldVertex.UnmarshalBinary(oldData); err != nil {
-			return fmt.Errorf("failed to unmarshal old vertex: %w", err)
-		}
-
-		if err := cm.deleteVertexIndices(tx, oldVertex); err != nil {
-			return fmt.Errorf("failed to delete old vertex indices: %w", err)
-		}
-
-		vertex.UpdatedAt = time.Now().UTC()
-		vertex.Version = oldVertex.Version + 1
-
-		newData, err := vertex.MarshalBinary()
-		if err != nil {
-			return fmt.Errorf("failed to marshal updated vertex: %w", err)
-		}
-
-		if err := tx.Set(key, newData); err != nil {
-			return err
-		}
-
-		if err := cm.createVertexIndices(tx, vertex); err != nil {
-			return fmt.Errorf("failed to create new vertex indices: %w", err)
-		}
-
-		return nil
+		return cm.updateVertexInTx(tx, vertex, key)
 	})
 }
 
+// UpdateVertexInTx updates a vertex using the provided transaction
+func (cm *CRUDManager) UpdateVertexInTx(tx Transaction, vertex *common.Vertex) error {
+	if err := vertex.Validate(); err != nil {
+		return fmt.Errorf("vertex validation failed: %w", err)
+	}
+
+	key := cm.keyBuilder.VertexKey(vertex.ID)
+	return cm.updateVertexInTx(tx, vertex, key)
+}
+
+// updateVertexInTx is the internal implementation
+func (cm *CRUDManager) updateVertexInTx(tx Transaction, vertex *common.Vertex, key []byte) error {
+	exists, err := tx.Exists(key)
+	if err != nil {
+		return err
+	}
+	if !exists {
+		return common.ErrVertexNotFound
+	}
+
+	oldData, err := tx.Get(key)
+	if err != nil {
+		return err
+	}
+
+	oldVertex := &common.Vertex{}
+	if err := oldVertex.UnmarshalBinary(oldData); err != nil {
+		return fmt.Errorf("failed to unmarshal old vertex: %w", err)
+	}
+
+	if err := cm.deleteVertexIndices(tx, oldVertex); err != nil {
+		return fmt.Errorf("failed to delete old vertex indices: %w", err)
+	}
+
+	vertex.UpdatedAt = time.Now().UTC()
+	vertex.Version = oldVertex.Version + 1
+
+	newData, err := vertex.MarshalBinary()
+	if err != nil {
+		return fmt.Errorf("failed to marshal updated vertex: %w", err)
+	}
+
+	if err := tx.Set(key, newData); err != nil {
+		return err
+	}
+
+	if err := cm.createVertexIndices(tx, vertex); err != nil {
+		return fmt.Errorf("failed to create new vertex indices: %w", err)
+	}
+
+	return nil
+}
+
+// DeleteVertex deletes a vertex, creating its own transaction
 func (cm *CRUDManager) DeleteVertex(vertexID string) error {
 	if err := common.ValidateKey(vertexID); err != nil {
 		return fmt.Errorf("invalid vertex ID: %w", err)
@@ -133,31 +171,47 @@ func (cm *CRUDManager) DeleteVertex(vertexID string) error {
 	key := cm.keyBuilder.VertexKey(vertexID)
 
 	return cm.store.Update(func(tx Transaction) error {
-		data, err := tx.Get(key)
-		if err == ErrKeyNotFound {
-			return common.ErrVertexNotFound
-		}
-		if err != nil {
-			return err
-		}
-
-		vertex := &common.Vertex{}
-		if err := vertex.UnmarshalBinary(data); err != nil {
-			return fmt.Errorf("failed to unmarshal vertex: %w", err)
-		}
-
-		if err := cm.checkVertexReferences(tx, vertexID); err != nil {
-			return err
-		}
-
-		if err := cm.deleteVertexIndices(tx, vertex); err != nil {
-			return fmt.Errorf("failed to delete vertex indices: %w", err)
-		}
-
-		return tx.Delete(key)
+		return cm.deleteVertexInTx(tx, vertexID, key)
 	})
 }
 
+// DeleteVertexInTx deletes a vertex using the provided transaction
+func (cm *CRUDManager) DeleteVertexInTx(tx Transaction, vertexID string) error {
+	if err := common.ValidateKey(vertexID); err != nil {
+		return fmt.Errorf("invalid vertex ID: %w", err)
+	}
+
+	key := cm.keyBuilder.VertexKey(vertexID)
+	return cm.deleteVertexInTx(tx, vertexID, key)
+}
+
+// deleteVertexInTx is the internal implementation
+func (cm *CRUDManager) deleteVertexInTx(tx Transaction, vertexID string, key []byte) error {
+	data, err := tx.Get(key)
+	if err == ErrKeyNotFound {
+		return common.ErrVertexNotFound
+	}
+	if err != nil {
+		return err
+	}
+
+	vertex := &common.Vertex{}
+	if err := vertex.UnmarshalBinary(data); err != nil {
+		return fmt.Errorf("failed to unmarshal vertex: %w", err)
+	}
+
+	if err := cm.checkVertexReferences(tx, vertexID); err != nil {
+		return err
+	}
+
+	if err := cm.deleteVertexIndices(tx, vertex); err != nil {
+		return fmt.Errorf("failed to delete vertex indices: %w", err)
+	}
+
+	return tx.Delete(key)
+}
+
+// StoreEdge stores an edge, creating its own transaction
 func (cm *CRUDManager) StoreEdge(edge *common.Edge) error {
 	if err := edge.Validate(); err != nil {
 		return fmt.Errorf("edge validation failed: %w", err)
@@ -170,40 +224,60 @@ func (cm *CRUDManager) StoreEdge(edge *common.Edge) error {
 	}
 
 	return cm.store.Update(func(tx Transaction) error {
-		exists, err := tx.Exists(key)
-		if err != nil {
-			return err
-		}
-		if exists {
-			return common.ErrDuplicateEdge
-		}
-
-		fromExists, err := tx.Exists(cm.keyBuilder.VertexKey(edge.FromVertex))
-		if err != nil {
-			return err
-		}
-		if !fromExists {
-			return fmt.Errorf("from vertex %s does not exist", edge.FromVertex)
-		}
-
-		toExists, err := tx.Exists(cm.keyBuilder.VertexKey(edge.ToVertex))
-		if err != nil {
-			return err
-		}
-		if !toExists {
-			return fmt.Errorf("to vertex %s does not exist", edge.ToVertex)
-		}
-
-		if err := tx.Set(key, data); err != nil {
-			return err
-		}
-
-		if err := cm.createEdgeIndices(tx, edge); err != nil {
-			return fmt.Errorf("failed to create edge indices: %w", err)
-		}
-
-		return nil
+		return cm.storeEdgeInTx(tx, edge, key, data)
 	})
+}
+
+// StoreEdgeInTx stores an edge using the provided transaction
+func (cm *CRUDManager) StoreEdgeInTx(tx Transaction, edge *common.Edge) error {
+	if err := edge.Validate(); err != nil {
+		return fmt.Errorf("edge validation failed: %w", err)
+	}
+
+	key := cm.keyBuilder.EdgeKey(edge.ID)
+	data, err := edge.MarshalBinary()
+	if err != nil {
+		return fmt.Errorf("failed to marshal edge: %w", err)
+	}
+
+	return cm.storeEdgeInTx(tx, edge, key, data)
+}
+
+// storeEdgeInTx is the internal implementation
+func (cm *CRUDManager) storeEdgeInTx(tx Transaction, edge *common.Edge, key []byte, data []byte) error {
+	exists, err := tx.Exists(key)
+	if err != nil {
+		return err
+	}
+	if exists {
+		return common.ErrDuplicateEdge
+	}
+
+	fromExists, err := tx.Exists(cm.keyBuilder.VertexKey(edge.FromVertex))
+	if err != nil {
+		return err
+	}
+	if !fromExists {
+		return fmt.Errorf("from vertex %s does not exist", edge.FromVertex)
+	}
+
+	toExists, err := tx.Exists(cm.keyBuilder.VertexKey(edge.ToVertex))
+	if err != nil {
+		return err
+	}
+	if !toExists {
+		return fmt.Errorf("to vertex %s does not exist", edge.ToVertex)
+	}
+
+	if err := tx.Set(key, data); err != nil {
+		return err
+	}
+
+	if err := cm.createEdgeIndices(tx, edge); err != nil {
+		return fmt.Errorf("failed to create edge indices: %w", err)
+	}
+
+	return nil
 }
 
 func (cm *CRUDManager) GetEdge(edgeID string) (*common.Edge, error) {
@@ -228,6 +302,7 @@ func (cm *CRUDManager) GetEdge(edgeID string) (*common.Edge, error) {
 	return edge, nil
 }
 
+// DeleteEdge deletes an edge, creating its own transaction
 func (cm *CRUDManager) DeleteEdge(edgeID string) error {
 	if err := common.ValidateKey(edgeID); err != nil {
 		return fmt.Errorf("invalid edge ID: %w", err)
@@ -236,25 +311,40 @@ func (cm *CRUDManager) DeleteEdge(edgeID string) error {
 	key := cm.keyBuilder.EdgeKey(edgeID)
 
 	return cm.store.Update(func(tx Transaction) error {
-		data, err := tx.Get(key)
-		if err == ErrKeyNotFound {
-			return common.ErrEdgeNotFound
-		}
-		if err != nil {
-			return err
-		}
-
-		edge := &common.Edge{}
-		if err := edge.UnmarshalBinary(data); err != nil {
-			return fmt.Errorf("failed to unmarshal edge: %w", err)
-		}
-
-		if err := cm.deleteEdgeIndices(tx, edge); err != nil {
-			return fmt.Errorf("failed to delete edge indices: %w", err)
-		}
-
-		return tx.Delete(key)
+		return cm.deleteEdgeInTx(tx, edgeID, key)
 	})
+}
+
+// DeleteEdgeInTx deletes an edge using the provided transaction
+func (cm *CRUDManager) DeleteEdgeInTx(tx Transaction, edgeID string) error {
+	if err := common.ValidateKey(edgeID); err != nil {
+		return fmt.Errorf("invalid edge ID: %w", err)
+	}
+
+	key := cm.keyBuilder.EdgeKey(edgeID)
+	return cm.deleteEdgeInTx(tx, edgeID, key)
+}
+
+// deleteEdgeInTx is the internal implementation
+func (cm *CRUDManager) deleteEdgeInTx(tx Transaction, edgeID string, key []byte) error {
+	data, err := tx.Get(key)
+	if err == ErrKeyNotFound {
+		return common.ErrEdgeNotFound
+	}
+	if err != nil {
+		return err
+	}
+
+	edge := &common.Edge{}
+	if err := edge.UnmarshalBinary(data); err != nil {
+		return fmt.Errorf("failed to unmarshal edge: %w", err)
+	}
+
+	if err := cm.deleteEdgeIndices(tx, edge); err != nil {
+		return fmt.Errorf("failed to delete edge indices: %w", err)
+	}
+
+	return tx.Delete(key)
 }
 
 func (cm *CRUDManager) GetVerticesByType(vertexType string, limit int) ([]*common.Vertex, error) {

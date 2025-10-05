@@ -31,8 +31,8 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/agen/cellorg/internal/agent"
-	"github.com/agen/cellorg/internal/client"
+	"github.com/tenzoki/agen/cellorg/public/agent"
+	"github.com/tenzoki/agen/cellorg/public/client"
 )
 
 // VectorStoreAgent implements the AgentRunner interface for vector storage

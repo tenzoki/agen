@@ -1,0 +1,45 @@
+# Text Extraction Pipeline
+cell:
+  id: "pipeline:text-extraction"
+  description: "Document text extraction pipeline with multi-format support and OCR"
+  debug: true
+
+  orchestration:
+    startup_timeout: "45s"
+    shutdown_timeout: "20s"
+    max_retries: 3
+    retry_delay: "5s"
+    health_check_interval: "15s"
+
+  agents:
+    - id: "file-ingester-text-001"
+      agent_type: "file-ingester"
+      ingress: "file:examples/text-extraction/input/*.{pdf,docx,xlsx,txt,png,jpg}"
+      egress: "pub:document-files"
+      dependencies: []
+      config:
+        digest: false
+        watch_interval_seconds: 3
+        supported_extensions: [".pdf", ".docx", ".xlsx", ".txt", ".png", ".jpg", ".jpeg"]
+
+    - id: "text-extractor-001"
+      agent_type: "text-extractor"
+      ingress: "sub:document-files"
+      egress: "pub:extracted-text"
+      dependencies: ["file-ingester-text-001"]
+      config:
+        enable_ocr: true
+        ocr_languages: ["eng", "deu", "fra"]
+        quality_threshold: 0.7
+        timeout: "60s"
+        output_format: "json"
+
+    - id: "file-writer-text-001"
+      agent_type: "file-writer"
+      ingress: "sub:extracted-text"
+      egress: "file:examples/text-extraction/output/extracted_{{.filename}}_{{.timestamp}}.json"
+      dependencies: ["text-extractor-001"]
+      config:
+        output_format: "json"
+        create_directories: true
+        preserve_metadata: true

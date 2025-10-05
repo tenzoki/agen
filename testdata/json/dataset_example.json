@@ -1,0 +1,55 @@
+{
+  "dataset_info": {
+    "name": "Customer Sentiment Analysis",
+    "version": "1.2",
+    "created_date": "2024-09-27",
+    "description": "A dataset for training sentiment analysis models on customer reviews",
+    "total_samples": 1000,
+    "class_distribution": {
+      "positive": 400,
+      "negative": 350,
+      "neutral": 250
+    }
+  },
+  "samples": [
+    {
+      "id": "sample_001",
+      "text": "This product is absolutely amazing! Best purchase I've ever made.",
+      "label": "positive",
+      "confidence": 0.95,
+      "metadata": {
+        "source": "amazon_reviews",
+        "product_category": "electronics",
+        "review_date": "2024-09-15"
+      }
+    },
+    {
+      "id": "sample_002",
+      "text": "The quality is terrible and it broke after one day. Very disappointed.",
+      "label": "negative",
+      "confidence": 0.92,
+      "metadata": {
+        "source": "amazon_reviews",
+        "product_category": "electronics",
+        "review_date": "2024-09-20"
+      }
+    },
+    {
+      "id": "sample_003",
+      "text": "It's okay. Does what it's supposed to do, nothing special.",
+      "label": "neutral",
+      "confidence": 0.78,
+      "metadata": {
+        "source": "amazon_reviews",
+        "product_category": "electronics",
+        "review_date": "2024-09-25"
+      }
+    }
+  ],
+  "statistics": {
+    "avg_text_length": 127,
+    "avg_confidence": 0.88,
+    "languages": ["en"],
+    "sources": ["amazon_reviews", "yelp_reviews", "google_reviews"]
+  }
+}

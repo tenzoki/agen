@@ -1,3 +1,5 @@
+//go:build ignore
+
 package main
 
 import (
@@ -6,7 +8,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/godast/godast/pkg/omnistore"
+	"github.com/tenzoki/agen/omni/public/omnistore"
 )
 
 func main() {

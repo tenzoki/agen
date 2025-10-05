@@ -23,7 +23,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/agen/cellorg/internal/envelope"
+	"github.com/tenzoki/agen/cellorg/internal/envelope"
 )
 
 // Service represents the central broker service that handles all agent communication.

@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/agen/cellorg/internal/storage"
+	"github.com/tenzoki/agen/cellorg/internal/storage"
 )
 
 // BatchRegisterChunks registers multiple file splits in a single transaction

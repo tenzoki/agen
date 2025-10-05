@@ -1,0 +1,15 @@
+
+
+chunk processor implementation, the processors do much more than just parse content:
+
+  - TextProcessor: Extracts keywords, performs NLP analysis, sentiment analysis
+  - JSONProcessor: Validates, prettifies, extracts schemas
+  - XMLProcessor: Validates, prettifies, extracts tag structures
+  - ImageProcessor: Extracts metadata, generates thumbnails, analyzes colors
+  - BinaryProcessor: Calculates checksums, analyzes file structure
+
+graph
+- axioms
+- ner
+
+

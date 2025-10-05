@@ -1,0 +1,72 @@
+# Research Paper Processing Pipeline (academic-focused)
+cell:
+  id: "pipeline:research-paper-processing"
+  description: "Specialized pipeline for academic research paper processing"
+  debug: true
+
+  orchestration:
+    startup_timeout: "120s"
+    shutdown_timeout: "40s"
+    max_retries: 3
+    retry_delay: "15s"
+    health_check_interval: "45s"
+
+  agents:
+    # Text extraction with high quality settings
+    - id: "text-extractor-research-001"
+      agent_type: "text-extractor"
+      ingress: "sub:research-papers"
+      egress: "pub:research-text"
+      dependencies: []
+      config:
+        enable_ocr: true
+        ocr_languages: "eng"
+        timeout_seconds: 180
+        worker_pool_size: 6
+
+    # Academic strategy selection
+    - id: "strategy-selector-research-001"
+      agent_type: "strategy-selector"
+      ingress: "sub:research-text"
+      egress: "pub:research-strategies"
+      dependencies: ["text-extractor-research-001"]
+      config:
+        default_strategy: "academic_paper"
+        enable_content_analysis: true
+
+    # Section-aware chunking
+    - id: "text-chunker-research-001"
+      agent_type: "text-chunker"
+      ingress: "sub:research-strategies"
+      egress: "pub:research-chunks"
+      dependencies: ["strategy-selector-research-001"]
+      config:
+        default_chunk_size: 1024
+        max_chunk_size: 3072
+        default_overlap: 512  # Larger overlap for academic content
+
+    # Deep context enrichment
+    - id: "context-enricher-research-001"
+      agent_type: "context-enricher"
+      ingress: "sub:research-chunks"
+      egress: "pub:research-enriched"
+      dependencies: ["text-chunker-research-001"]
+      config:
+        enable_positional_context: true
+        enable_semantic_context: true
+        enable_structural_context: true
+        enable_relational_context: true
+        context_depth: 5  # Deeper analysis for academic content
+
+    # Multiple format output
+    - id: "chunk-writer-research-001"
+      agent_type: "chunk-writer"
+      ingress: "sub:research-enriched"
+      egress: "file:output/research-papers/{{.request_id}}/{{.content_type}}/chunk_{{.index}}.json"
+      dependencies: ["context-enricher-research-001"]
+      config:
+        default_output_format: "json"
+        output_directory: "output/research-papers"
+        create_directories: true
+        preserve_metadata: true
+        naming_scheme: "custom"

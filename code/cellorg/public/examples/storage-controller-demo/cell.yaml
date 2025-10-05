@@ -1,0 +1,118 @@
+# Storage Integration Demo Cell
+# This demonstrates proper usage of external storage service
+
+cell:
+  id: "cell:file-processing-with-storage-demo"
+  description: "File processing cell that uses external storage service"
+
+  orchestration:
+    startup_timeout: "45s"
+    shutdown_timeout: "20s"
+    max_retries: 3
+    health_check_interval: "10s"
+
+  agents:
+    # File ingester - pure data processing
+    - id: "enhanced-ingester-001"
+      agent_type: "file-ingester"
+      dependencies: []
+      ingress: "file:examples/data/samples/storage-controller-demo/input/*.{txt,md,json}"
+      egress: "pub:raw-files"
+      config:
+        digest: true
+        digest_strategy: "archive"
+        watch_interval: "5s"
+        include_metadata: true
+        # Storage service configuration
+        storage_service_url: "http://localhost:9002/storage/v1"
+        enable_storage_logging: true
+
+    # Text transformer with storage integration via HTTP API
+    - id: "enhanced-transformer-001"
+      agent_type: "text-transformer"
+      dependencies: ["enhanced-ingester-001"]
+      ingress: "sub:raw-files"
+      egress: "pub:processed-content"
+      config:
+        transformation_type: "enhance"
+        add_timestamps: true
+        include_metadata: true
+        # Storage service integration
+        storage_service_url: "http://localhost:9002/storage/v1"
+        auto_index_content: true
+        store_intermediate_results: true
+
+    # File writer with storage metadata
+    - id: "enhanced-writer-001"
+      agent_type: "file-writer"
+      dependencies: ["enhanced-transformer-001"]
+      ingress: "sub:processed-content"
+      egress: "file:examples/data/samples/storage-controller-demo/output/{{.type}}_{{.timestamp}}.txt"
+      config:
+        create_directories: true
+        include_metadata: true
+        # Storage service integration
+        storage_service_url: "http://localhost:9002/storage/v1"
+        backup_to_storage: true
+        track_file_relationships: true
+
+  # Clean message routing - no storage channels
+  messaging:
+    topics:
+      - name: "raw-files"
+        description: "Raw file content from ingester"
+        retention: "2h"
+        max_size: "500MB"
+
+      - name: "processed-content"
+        description: "Processed file content"
+        retention: "6h"
+        max_size: "1GB"
+
+  # Pipeline-specific monitoring
+  monitoring:
+    metrics:
+      - name: "files_processed_total"
+        type: "counter"
+        description: "Total files processed through pipeline"
+        labels: ["file_type", "status"]
+
+      - name: "processing_duration"
+        type: "histogram"
+        description: "File processing duration"
+        labels: ["processing_stage"]
+
+      - name: "storage_api_calls_total"
+        type: "counter"
+        description: "Storage API calls from pipeline"
+        labels: ["operation", "status"]
+
+    health_checks:
+      - agent_id: "enhanced-ingester-001"
+        endpoint: "/health"
+        interval: "15s"
+        timeout: "3s"
+
+      - agent_id: "enhanced-transformer-001"
+        endpoint: "/health"
+        interval: "15s"
+        timeout: "3s"
+
+      - agent_id: "enhanced-writer-001"
+        endpoint: "/health"
+        interval: "15s"
+        timeout: "3s"
+
+      # Check storage controller availability
+      - external_service: "storage-service"
+        endpoint: "http://localhost:9002/health"
+        interval: "30s"
+        timeout: "5s"
+
+  # Environment variables for all agents
+  environment:
+    GOX_LOG_LEVEL: "debug"
+    GOX_STORAGE_SERVICE_URL: "http://localhost:9002/storage/v1"
+    GOX_STORAGE_ENABLED: "true"
+    GOX_CELL_ID: "file-processing-with-storage"
+    GOX_METRICS_ENABLED: "true"

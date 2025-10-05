@@ -1,0 +1,111 @@
+{
+  "gox_framework_config": {
+    "metadata": {
+      "created_by": "GOX Test Suite",
+      "created_at": "2024-09-26T10:00:00Z",
+      "version": "2.1.0",
+      "schema_version": "1.2"
+    },
+    "processing_pipeline": {
+      "stages": [
+        {
+          "name": "ingestion",
+          "agents": ["file-ingester", "text-extractor"],
+          "config": {
+            "batch_size": 100,
+            "timeout": "30s",
+            "retry_attempts": 3
+          }
+        },
+        {
+          "name": "analysis",
+          "agents": ["text-analyzer", "json-analyzer", "xml-analyzer"],
+          "dependencies": ["ingestion"],
+          "config": {
+            "parallel_execution": true,
+            "max_concurrent": 5
+          }
+        },
+        {
+          "name": "output",
+          "agents": ["file-writer", "report-generator"],
+          "dependencies": ["analysis"],
+          "config": {
+            "output_format": "json",
+            "compression": "gzip"
+          }
+        }
+      ]
+    },
+    "data_sources": [
+      {
+        "id": "documents",
+        "type": "file_system",
+        "path": "/data/documents",
+        "filters": ["*.txt", "*.pdf", "*.docx"],
+        "watch": true
+      },
+      {
+        "id": "api_data",
+        "type": "rest_api",
+        "endpoint": "https://api.example.com/data",
+        "auth": {
+          "type": "bearer_token",
+          "token_env": "API_TOKEN"
+        },
+        "polling_interval": "5m"
+      }
+    ],
+    "output_destinations": [
+      {
+        "id": "storage",
+        "type": "object_storage",
+        "bucket": "gox-processed-data",
+        "path_template": "/{year}/{month}/{day}/{uuid}.json"
+      },
+      {
+        "id": "database",
+        "type": "postgres",
+        "connection": {
+          "host": "localhost",
+          "port": 5432,
+          "database": "gox_results",
+          "ssl_mode": "require"
+        }
+      }
+    ],
+    "monitoring": {
+      "metrics": {
+        "enabled": true,
+        "endpoint": "/metrics",
+        "interval": "30s"
+      },
+      "logging": {
+        "level": "info",
+        "format": "json",
+        "output": ["stdout", "file"],
+        "file_config": {
+          "path": "/var/log/gox/app.log",
+          "max_size": "100MB",
+          "max_files": 5
+        }
+      },
+      "health_checks": [
+        {
+          "name": "database",
+          "type": "tcp",
+          "target": "localhost:5432",
+          "interval": "10s",
+          "timeout": "5s"
+        },
+        {
+          "name": "storage",
+          "type": "http",
+          "target": "https://storage.example.com/health",
+          "interval": "30s",
+          "timeout": "10s"
+        }
+      ]
+    }
+  }
+}

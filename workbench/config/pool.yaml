@@ -1,0 +1,567 @@
+# Pool defines available agent types (not instances)
+
+pool:
+  agent_types:
+    - agent_type: "file-ingester"
+      binary: "agents/file_ingester/main.go"
+      operator: "call" # Default deployment strategy
+      capabilities: ["file-ingestion", "directory-watching"]
+      description: "Watches directories and ingests files"
+
+    - agent_type: "text-transformer"
+      binary: "agents/text_transformer/main.go"
+      operator: "spawn" # Process spawning (changed from await for demo)
+      capabilities: ["text-processing", "transformation"]
+      description: "Transforms text content"
+
+    - agent_type: "file-writer"
+      binary: "agents/file_writer/main.go"
+      operator: "spawn" # Process spawning
+      capabilities: ["file-writing", "data-persistence"]
+      description: "Writes processed data to files"
+
+    - agent_type: "godast-storage"
+      binary: "agents/godast_storage/main.go"
+      operator: "spawn" # Process spawning
+      capabilities: ["storage", "kv-store", "graph-database", "file-storage", "full-text-search", "persistence"]
+      description: "Unified storage backend using Godast with KV, Graph, File, and Search capabilities"
+
+    - agent_type: "adapter"
+      binary: "agents/adapter/main.go"
+      operator: "spawn" # Process spawning
+      capabilities:
+        [
+          "text-transform",
+          "format-conversion",
+          "json-processing",
+          "csv-processing",
+          "base64-encoding",
+        ]
+      description: "Provides data transformation services to other agents"
+
+    # Text Extraction and Document Processing Agents (decomposed from dual-mode text-extractor)
+    - agent_type: "text-extractor-native"
+      binary: "agents/text_extractor_native/main.go"
+      operator: "spawn"
+      capabilities:
+        [
+          "text-extraction",
+          "pdf-processing",
+          "docx-processing",
+          "xlsx-processing",
+          "native-ocr-processing",
+          "image-processing",
+          "multi-format-support",
+          "metadata-extraction",
+          "tesseract-ocr",
+        ]
+      description: "Multi-format text extraction with native Tesseract OCR for PDF, DOCX, XLSX, and image files"
+      config_defaults:
+        enable_ocr: true
+        timeout: 60000000000
+        worker_pool_size: 4
+        max_concurrent_jobs: 10
+        batch_size: 50
+        ocr_languages: "eng,deu,fra"
+        ocr_psm: 3
+        ocr_oem: 3
+        enable_preprocessing: true
+        enable_deskew: true
+        enable_noise_removal: true
+        contrast_enhancement: true
+        resolution_upscaling: false
+        auto_rotation: true
+        border_removal: false
+
+    - agent_type: "ocr-http-stub"
+      binary: "agents/ocr_http_stub/main.go"
+      operator: "await" # External HTTP service must be running
+      capabilities:
+        [
+          "ocr-processing",
+          "http-client",
+          "image-processing",
+          "pdf-ocr",
+          "batch-processing",
+          "multi-language-ocr",
+          "containerized-ocr",
+          "service-integration",
+        ]
+      description: "HTTP client stub for containerized OCR service with await pattern for service dependencies"
+      config_defaults:
+        service_url: "http://localhost:8080/ocr"
+        request_timeout: 300000000000  # 300 seconds
+        max_retries: 3
+        retry_delay: 5000000000        # 5 seconds
+        health_check_url: "http://localhost:8080/health"
+        supported_formats: ".png,.jpg,.jpeg,.tiff,.bmp,.pdf"
+
+    # DEPRECATED: document-processor has been decomposed into Framework-compliant agents
+    # Use pipeline:intelligent-document-processing cell instead
+
+    # Document Processing Pipeline Agents (Framework-compliant)
+    - agent_type: "strategy-selector"
+      binary: "agents/strategy_selector/main.go"
+      operator: "spawn" # Process spawning
+      capabilities:
+        [
+          "strategy-selection",
+          "content-analysis",
+          "document-classification",
+          "quality-assessment",
+          "rule-based-selection",
+          "format-detection",
+        ]
+      description: "Analyzes documents to select optimal chunking strategies"
+      config_defaults:
+        default_strategy: "general_text"
+        enable_content_analysis: true
+
+    - agent_type: "text-chunker"
+      binary: "agents/text_chunker/main.go"
+      operator: "spawn" # Process spawning
+      capabilities:
+        [
+          "text-chunking",
+          "paragraph-based-chunking",
+          "section-based-chunking",
+          "boundary-based-chunking",
+          "size-based-chunking",
+          "overlap-management",
+          "strategy-application",
+        ]
+      description: "Chunks text using various strategies with configurable parameters"
+      config_defaults:
+        default_chunk_size: 2048
+        max_chunk_size: 10485760     # 10MB
+        min_chunk_size: 256
+        default_overlap: 256
+        temp_dir: "/tmp/gox-text-chunker"
+
+    - agent_type: "context-enricher"
+      binary: "agents/context_enricher/main.go"
+      operator: "spawn" # Process spawning
+      capabilities:
+        [
+          "context-enrichment",
+          "semantic-classification",
+          "positional-analysis",
+          "structural-analysis",
+          "relational-analysis",
+          "metadata-extraction",
+          "keyword-extraction",
+        ]
+      description: "Enriches text chunks with contextual metadata and relationships"
+      config_defaults:
+        enable_positional_context: true
+        enable_semantic_context: true
+        enable_structural_context: true
+        enable_relational_context: false  # More expensive
+        context_depth: 3
+
+    - agent_type: "chunk-writer"
+      binary: "agents/chunk_writer/main.go"
+      operator: "spawn" # Process spawning
+      capabilities:
+        [
+          "chunk-writing",
+          "multi-format-output",
+          "json-formatting",
+          "text-formatting",
+          "markdown-formatting",
+          "csv-formatting",
+          "xml-formatting",
+          "file-organization",
+        ]
+      description: "Writes enriched chunks to various output formats and storage systems"
+      config_defaults:
+        default_output_format: "json"
+        output_directory: "/tmp/gox-chunk-writer"
+        create_directories: true
+        preserve_metadata: true
+        naming_scheme: "chunk_XXXX"
+        max_file_size: 10485760      # 10MB
+
+    # REMOVED: file-splitter - legacy agent removed in favor of cell-based file chunking
+    # Use file chunking cells with text_chunker agent instead for better orchestration
+    # Migration path: use chunking cells that combine text_chunker + chunk_writer
+
+    # DEPRECATED: chunk-processor has been decomposed into Framework-compliant agents
+    # Use processing cells instead: processing:content-analysis, processing:fast-analysis,
+    # processing:text-analysis-deep, processing:structured-data-analysis, processing:binary-media-analysis
+
+    # DEPRECATED: chunk-synthesizer has been decomposed into Framework-compliant agents
+    # Use synthesis cells instead: synthesis:document-summary, synthesis:full-analysis,
+    # synthesis:search-ready, synthesis:data-export, synthesis:reporting
+
+    # Content Analysis Agents (Framework-compliant decomposition of chunk_processor)
+    - agent_type: "text-analyzer"
+      binary: "agents/text_analyzer/main.go"
+      operator: "spawn"
+      capabilities:
+        [
+          "text-analysis",
+          "sentiment-analysis",
+          "keyword-extraction",
+          "language-detection",
+          "text-normalization",
+          "reading-level-analysis",
+          "text-statistics",
+          "text-classification",
+        ]
+      description: "Analyzes text content with sentiment, keywords, language detection, and quality metrics"
+      config_defaults:
+        enable_nlp: false
+        enable_sentiment: true
+        enable_keywords: true
+        max_lines: 10000
+        max_keywords: 20
+
+    - agent_type: "json-analyzer"
+      binary: "agents/json_analyzer/main.go"
+      operator: "spawn"
+      capabilities:
+        [
+          "json-analysis",
+          "json-validation",
+          "schema-generation",
+          "key-analysis",
+          "json-minification",
+          "structure-analysis",
+          "pattern-detection",
+          "json-classification",
+        ]
+      description: "Analyzes JSON content with validation, schema generation, and structural analysis"
+      config_defaults:
+        enable_validation: true
+        enable_schema_gen: true
+        enable_key_analysis: true
+        max_depth: 20
+        max_keys: 1000
+        enable_minification: false
+
+    - agent_type: "xml-analyzer"
+      binary: "agents/xml_analyzer/main.go"
+      operator: "spawn"
+      capabilities:
+        [
+          "xml-analysis",
+          "xml-validation",
+          "namespace-analysis",
+          "element-analysis",
+          "xml-minification",
+          "schema-detection",
+          "xml-classification",
+          "structure-analysis",
+        ]
+      description: "Analyzes XML content with validation, namespace analysis, and structural classification"
+      config_defaults:
+        enable_validation: true
+        enable_schema_gen: true
+        enable_namespace_analysis: true
+        max_depth: 20
+        max_elements: 1000
+        enable_minification: false
+
+    - agent_type: "binary-analyzer"
+      binary: "agents/binary_analyzer/main.go"
+      operator: "spawn"
+      capabilities:
+        [
+          "binary-analysis",
+          "file-type-detection",
+          "entropy-analysis",
+          "hash-calculation",
+          "magic-bytes-detection",
+          "compression-detection",
+          "encryption-detection",
+          "structural-analysis",
+        ]
+      description: "Analyzes binary content with file type detection, entropy analysis, and pattern recognition"
+      config_defaults:
+        enable_hashing: true
+        enable_entropy: true
+        enable_magic_bytes: true
+        max_analysis_size: 10485760  # 10MB
+        enable_structural: true
+        enable_compression: false
+
+    - agent_type: "image-analyzer"
+      binary: "agents/image_analyzer/main.go"
+      operator: "spawn"
+      capabilities:
+        [
+          "image-analysis",
+          "image-metadata-extraction",
+          "dimension-analysis",
+          "color-analysis",
+          "image-format-detection",
+          "quality-assessment",
+          "image-classification",
+          "pattern-detection",
+        ]
+      description: "Analyzes image content with metadata extraction, format detection, and quality assessment"
+      config_defaults:
+        enable_metadata: true
+        enable_dimensions: true
+        enable_color_analysis: true
+        max_analysis_size: 10485760  # 10MB
+        enable_thumbnail: false
+        enable_quality: true
+
+    # Test-specific agent types
+    - agent_type: "test-agent"
+      binary: "test/test_agent"
+      operator: "spawn"
+      capabilities: ["test"]
+      description: "Test agent for integration tests"
+
+
+    - agent_type: "concurrent-test"
+      binary: "test/concurrent_agent"
+      operator: "spawn"
+      capabilities: ["concurrent", "test"]
+      description: "Concurrent test agent"
+
+    - agent_type: "health-test"
+      binary: "test/health_agent"
+      operator: "spawn"
+      capabilities: ["health", "test"]
+      description: "Health check test agent"
+
+    - agent_type: "test-support-agent"
+      binary: "test/support_agent"
+      operator: "spawn"
+      capabilities: ["support", "test"]
+      description: "Support service test agent"
+
+    - agent_type: "test-client-agent"
+      binary: "test/client_agent"
+      operator: "spawn"
+      capabilities: ["client", "test"]
+      description: "Test client agent"
+
+    # Synthesis Agents (Framework-compliant decomposition of chunk_synthesizer)
+    - agent_type: "summary-generator"
+      binary: "agents/summary_generator/main.go"
+      operator: "spawn"
+      capabilities:
+        [
+          "document-summarization",
+          "content-synthesis",
+          "keyword-extraction",
+          "topic-analysis",
+          "language-detection",
+          "title-generation",
+          "section-analysis"
+        ]
+      description: "Generates comprehensive document summaries from processed chunks"
+      config_defaults:
+        max_keywords: 20
+        max_topics: 10
+        summary_length: 500
+        output_format: "json"
+        enable_sections: true
+
+    - agent_type: "search-indexer"
+      binary: "agents/search_indexer/main.go"
+      operator: "spawn"
+      capabilities:
+        [
+          "search-indexing",
+          "term-indexing",
+          "document-indexing",
+          "tf-idf-calculation",
+          "index-statistics",
+          "keyword-scoring",
+          "full-text-search"
+        ]
+      description: "Builds searchable indexes from processed chunk content"
+      config_defaults:
+        max_terms: 10000
+        min_term_frequency: 1
+        calculate_positions: true
+        index_format: "json"
+        score_threshold: 0.1
+
+    - agent_type: "metadata-collector"
+      binary: "agents/metadata_collector/main.go"
+      operator: "spawn"
+      capabilities:
+        [
+          "metadata-collection",
+          "schema-generation",
+          "metadata-aggregation",
+          "statistics-calculation",
+          "tag-extraction",
+          "property-analysis"
+        ]
+      description: "Collects and aggregates metadata from all processed chunks"
+      config_defaults:
+        include_chunk_metadata: true
+        include_file_metadata: true
+        generate_schema: true
+        output_format: "json"
+        max_metadata_size: 10485760
+
+    - agent_type: "report-generator"
+      binary: "agents/report_generator/main.go"
+      operator: "spawn"
+      capabilities:
+        [
+          "report-generation",
+          "analysis-reporting",
+          "chart-generation",
+          "table-generation",
+          "recommendation-generation",
+          "quality-assessment",
+          "statistical-analysis"
+        ]
+      description: "Generates comprehensive analysis reports with charts and recommendations"
+      config_defaults:
+        include_charts: true
+        include_tables: true
+        include_recommendations: true
+        report_format: "json"
+        max_recommendations: 5
+
+    - agent_type: "dataset-builder"
+      binary: "agents/dataset_builder/main.go"
+      operator: "spawn"
+      capabilities:
+        [
+          "dataset-creation",
+          "data-structuring",
+          "schema-generation",
+          "data-validation",
+          "statistical-analysis",
+          "record-formatting",
+          "data-export"
+        ]
+      description: "Converts chunk processing results into structured datasets"
+      config_defaults:
+        output_format: "json"
+        include_metadata: true
+        generate_schema: true
+        naming_scheme: "chunk_XXXX"
+        max_records: 100000
+        enable_validation: true
+
+    # RAG (Retrieval-Augmented Generation) Agents
+    - agent_type: "embedding-agent"
+      binary: "agents/embedding_agent/main.go"
+      operator: "spawn"
+      capabilities:
+        [
+          "embedding-generation",
+          "openai-embeddings",
+          "vector-generation",
+          "caching",
+          "batch-processing"
+        ]
+      description: "Generates vector embeddings for text/code chunks using OpenAI with VFS-based caching"
+      config_defaults:
+        provider: "openai"
+        model: "text-embedding-3-small"
+        batch_size: 100
+        cache_enabled: true
+        timeout: 30000000000  # 30s
+        dimensions: 1536
+
+    - agent_type: "vectorstore-agent"
+      binary: "agents/vectorstore_agent/main.go"
+      operator: "spawn"
+      capabilities:
+        [
+          "vector-storage",
+          "similarity-search",
+          "cosine-similarity",
+          "flat-index",
+          "metadata-filtering",
+          "persistent-storage"
+        ]
+      description: "Stores and searches vector embeddings with cosine similarity search and metadata filtering"
+      config_defaults:
+        index_type: "flat"
+        dimensions: 1536
+        m: 16               # HNSW param (future)
+        ef_construction: 200
+        ef_search: 50
+        max_elements: 1000000
+
+    - agent_type: "rag-agent"
+      binary: "agents/rag_agent/main.go"
+      operator: "spawn"
+      capabilities:
+        [
+          "rag-orchestration",
+          "retrieval",
+          "context-assembly",
+          "reranking",
+          "query-processing"
+        ]
+      description: "Orchestrates RAG workflow: embedding generation, vector search, content retrieval, and context assembly"
+      config_defaults:
+        top_k: 5
+        rerank: true
+        max_context_tokens: 4000
+        include_surrounding_lines: 3
+        score_threshold: 0.0
+
+    # Anonymization Pipeline Agents
+    - agent_type: "anonymization-store"
+      binary: "agents/anonymization_store/main.go"
+      operator: "spawn"
+      capabilities:
+        [
+          "persistent-storage",
+          "key-value-store",
+          "bbolt-backend",
+          "forward-reverse-lookup",
+          "soft-delete",
+          "audit-trail"
+        ]
+      description: "Persistent storage for anonymization mappings using godast/omnistore with bbolt backend"
+      config_defaults:
+        data_path: "/tmp/gox-anonymization-store"
+        max_file_size: 104857600  # 100MB
+        enable_debug: false
+
+    - agent_type: "ner-agent"
+      binary: "agents/ner_agent/main.go"
+      operator: "spawn"
+      capabilities:
+        [
+          "named-entity-recognition",
+          "onnxruntime-inference",
+          "multilingual-ner",
+          "xlm-roberta",
+          "pii-detection",
+          "entity-extraction"
+        ]
+      description: "Named Entity Recognition using ONNXRuntime with multilingual XLM-RoBERTa model"
+      config_defaults:
+        model_path: "models/ner/xlm-roberta-ner.onnx"
+        tokenizer_path: "models/ner/"
+        max_seq_length: 128
+        confidence_threshold: 0.5
+        enable_debug: false
+
+    - agent_type: "anonymizer"
+      binary: "agents/anonymizer/main.go"
+      operator: "spawn"
+      capabilities:
+        [
+          "pseudonymization",
+          "pii-anonymization",
+          "deterministic-hashing",
+          "persistent-mappings",
+          "bidirectional-lookup",
+          "gdpr-compliance"
+        ]
+      description: "Anonymizes entities using deterministic pseudonyms with persistent storage"
+      config_defaults:
+        storage_agent_id: "anonymization-store-001"
+        pipeline_version: "v1.0"
+        enable_debug: false
+        timeout_seconds: 30

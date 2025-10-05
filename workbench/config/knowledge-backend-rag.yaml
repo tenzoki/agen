@@ -1,0 +1,72 @@
+# RAG Knowledge Backend Pipeline for Alfa Integration
+cell:
+  id: "rag:knowledge-backend"
+  description: "RAG pipeline providing semantic code search and context retrieval for Alfa AI assistant"
+  debug: true
+
+  orchestration:
+    startup_timeout: "60s"
+    shutdown_timeout: "30s"
+    max_retries: 3
+    retry_delay: "5s"
+    health_check_interval: "15s"
+
+  agents:
+    # RAG Orchestrator - Coordinates embedding, search, and context assembly
+    # Alfa subscribes to rag-queries topic and publishes results
+    - id: "rag-agent-001"
+      agent_type: "rag-agent"
+      dependencies: ["embedding-agent-001", "vectorstore-agent-001", "godast-storage-001"]
+      ingress: "sub:{project_id}:rag-queries"
+      egress: "pub:{project_id}:rag-results"
+      config:
+        top_k: 5
+        rerank: true
+        max_context_tokens: 4000
+        include_surrounding_lines: 3
+        score_threshold: 0.5
+
+    # Embedding Generator - Converts text to vectors using OpenAI
+    - id: "embedding-agent-001"
+      agent_type: "embedding-agent"
+      dependencies: []
+      ingress: "sub:embedding-requests"
+      egress: "pub:embeddings"
+      config:
+        provider: "openai"
+        model: "text-embedding-3-small"
+        batch_size: 100
+        cache_enabled: true
+        timeout: 30000000000  # 30s
+        dimensions: 1536
+
+    # Vector Store - Similarity search for code chunks
+    - id: "vectorstore-agent-001"
+      agent_type: "vectorstore-agent"
+      dependencies: []
+      ingress: "sub:vector-operations"
+      egress: "pub:vector-results"
+      config:
+        index_type: "flat"
+        dimensions: 1536
+        max_elements: 1000000
+
+    # Godast Storage - Content storage and retrieval
+    - id: "godast-storage-001"
+      agent_type: "godast-storage"
+      dependencies: []
+      ingress: "sub:storage-operations"
+      egress: "pub:storage-results"
+      config:
+        storage_path: "/var/lib/gox/projects/default/storage"
+        enable_kv: true
+        enable_graph: true
+        enable_file: true
+        enable_search: true
+
+  environment:
+    OPENAI_API_KEY: "${OPENAI_API_KEY}"
+    GOX_DATA_ROOT: "/var/lib/gox"
+    GOX_PROJECT_ID: "default"
+    GOX_LOG_LEVEL: "debug"
+    GOX_DEBUG: "true"
