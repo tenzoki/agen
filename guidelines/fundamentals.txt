@@ -8,14 +8,18 @@ File: guidelines/fundamentals.txt
 Purpose
 
 If you are a human:
-This entire folder (guidelines/) contains operational and collaboration instructions for both the AI system and the human project manager.
+This folder contains operational and collaboration instructions for both AI and human.
 
 If you are an LLM (AI agent):
-	•	This file provides an overview and defines key operational rules.
-	•	Next steps:
-		•	Visit the reflect/ folder for architectural and conceptual context.
-		•	Visit guidelines/progress.txt to understand the history of recent changes.
-		•	Search the local Git repository if you require deeper insight into the evolution of the codebase.
+	•	This file: Overview and operational rules
+	•	Essential reading:
+		•	guidelines/immutable-principles.md - Architecture principles (MUST READ before changes)
+		•	guidelines/agent-development-guide.md - Creating agents
+		•	guidelines/configuration-conventions.md - Config standards
+		•	guidelines/tasks.txt - Current tasks
+		•	guidelines/progress.txt - Recent changes history
+	•	Architecture: reflect/architecture/
+	•	Cell definitions: reflect/cells/
 
 ⸻
 
@@ -100,28 +104,29 @@ Note: Whenever the top-level structure changes (e.g., folders added, renamed, or
 ⸻
 
 Folder Responsibilities
-	•	guidelines/ – Instructions for both the AI and the human collaborator.
-	•	bin/ – All binaries. Adjust make/build scripts to always output here.
-	•	builder/ – Makefiles, build and test scripts.
-	•	code/ – All Go source code, organized as:
-	•	atomic/ – Tools usable independently (no internal AGEN dependencies).
-	•	omni/ – Unified storage system (OmniStore, formerly godast).
-	•	agents/ – Implemented AI agents.
-	•	cellorg/ – Core code of the GOX pattern (base agents, brokers, etc.).
-	•	alfa/ – The AI workbench (as inherited from the AFA integration).
-	•	drivers/ – Platform-specific code and binaries (macOS, Docker, Linux, etc.).
-	•	trained/ – Model-related files (embeddings, NER, etc.).
-	•	support/ – Auto-generated knowledge content for AGEN’s self-awareness.
-	•	A pipeline (cell pattern) gathers all project READMEs to build a self-knowledge base.
-	•	Executed automatically on startup and upon self-modification.
-	•	workbench/ – Operational base for alfa, including the local Git repo.
-	•	workbench/projects/ – Specific alfa projects.
-	•	tests/ – Unit and integration tests placed alongside source files.
-	•	Aggregated test suites reside in builder/.
-	•	Reports are stored in /support.
-	•	demos/ – Example code (*_demo.go) placed beside source files.
-	•	testdata/ – Data for tests and demos.
-	•	README.md – Every folder includes a README using guidelines/README-template.md.
+
+bin/ – Build output (all binaries)
+builder/ – Makefiles, test scripts
+code/ – All Go source code:
+	•	atomic/ – Foundation utilities (VFS, VCR) - zero external deps
+	•	omni/ – OmniStore unified storage (KV + Graph + Files)
+	•	cellorg/ – Cell orchestration framework
+	•	agents/ – All 28+ agent implementations
+	•	alfa/ – AI workbench runtime
+drivers/ – Platform-specific binaries (tokenizers, etc.)
+guidelines/ – Operational instructions (this folder)
+reflect/ – Architecture docs, cell definitions, test reports
+testdata/ – Centralized test data
+trained/ – ML models (NER, embeddings, etc.)
+workbench/ – Runtime workspace:
+	•	config/ – Cell and agent configurations (YAML)
+	•	demos/ – Multi-module demo apps
+	•	projects/ – VFS-isolated user projects
+
+Key patterns:
+	•	Tests co-located with source (*_test.go)
+	•	Demos co-located with source (*_demo.go, build tag: //go:build ignore)
+	•	Every folder has README.md (use guidelines/README-template.md)
 
 ⸻
 
@@ -169,12 +174,12 @@ You may:
 	•	Update and optimize READMEs (using the shared template).
 
 Crucial constraint:
-	•	Changes you consider must always be fully compliant with the fundamental architecture principles as described in: reflect/immutable-principles.md
+	•	Changes you consider must always be fully compliant with the fundamental architecture principles as described in: guidelines/immutable-principles.md
 	•	Check that file before the change!
 
 You must not:
 	•	Your changes must not violate the fundamental principles in any way!
-		•	Always check compliance against these rules as described in: reflect/immutable-principles.md
+		•	Always check compliance against these rules as described in: guidelines/immutable-principles.md
 	•	Modify the main runtime (alfa) without approval.
 	•	Alter the core cell orchestration pattern.
 

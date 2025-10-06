@@ -345,3 +345,11 @@ This architecture makes AGEN:
 - **Evolvable** - Internals can change, APIs stay stable
 - **Secure** - VFS/VCR enforce boundaries
 - **Simple** - Agents are 3 methods, everything else is framework
+
+---
+
+## Related Documentation
+
+- **[Configuration Conventions](./configuration-conventions.md)** - Standard config resolution for all binaries
+- **[Architecture Documentation](./architecture/)** - Detailed module designs
+- **[Workbench Config Guide](../workbench/config/README.md)** - Configuration file formats

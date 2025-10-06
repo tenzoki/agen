@@ -12,7 +12,7 @@ Added StandardConfigResolver integration to agent framework, achieving 100% conf
    - Works for all 28 agents automatically via framework
 
 2. **Integrated StandardConfigResolver** (framework.go:129-150):
-   - Uses 7-level resolution order from configuration-conventions.md
+   - Uses 7-level resolution order from guidelines/configuration-conventions.md
    - Resolution order: CLI flag → AGEN_CONFIG_PATH → AGEN_WORKBENCH_DIR → CWD paths → embedded defaults
    - Logs which config file was loaded for transparency
 
@@ -43,7 +43,7 @@ Added StandardConfigResolver integration to agent framework, achieving 100% conf
 **Files Changed**:
 - `code/cellorg/public/agent/framework.go`: Added config resolution logic (+65 lines)
 
-**Impact**: This single framework change fixes all 28 agent binaries at once, bringing them into full compliance with reflect/configuration-conventions.md. Task documented in guidelines/tasks.txt is now complete.
+**Impact**: This single framework change fixes all 28 agent binaries at once, bringing them into full compliance with guidelines/configuration-conventions.md. Task documented in guidelines/tasks.txt is now complete.
 
 **Version**: Patch increment (infrastructure improvement, no API changes)
 
@@ -199,7 +199,7 @@ go build -o build/ner_agent ./agents/ner_agent/
 ## Immutable Principles Documented ✅
 **Timestamp**: 2025-10-05 17:05 UTC
 
-Created `reflect/immutable-principles.md` - comprehensive documentation of AGEN's fundamental architectural principles that must not be violated.
+Created `guidelines/immutable-principles.md` - comprehensive documentation of AGEN's fundamental architectural principles that must not be violated.
 
 **Key Sections**:
 1. **Core Principles**: Cells-first, zero deps for atomic, single public storage API, zero-boilerplate agents
