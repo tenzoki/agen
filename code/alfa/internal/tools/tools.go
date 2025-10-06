@@ -239,6 +239,11 @@ func (d *Dispatcher) executeRunCommand(ctx context.Context, action Action) Resul
 	output, err := cmd.CombinedOutput()
 	outputStr := string(output)
 
+	// Always print output to user (regardless of capture setting)
+	if len(outputStr) > 0 {
+		fmt.Print(outputStr)
+	}
+
 	if err != nil {
 		return Result{
 			Action:  action,
@@ -275,6 +280,14 @@ func (d *Dispatcher) executeRunCommandSandboxed(ctx context.Context, action Acti
 
 	result, err := d.sandbox.Execute(ctx, req)
 	outputStr := result.Stdout + "\n" + result.Stderr
+
+	// Always print output to user
+	if len(result.Stdout) > 0 {
+		fmt.Print(result.Stdout)
+	}
+	if len(result.Stderr) > 0 {
+		fmt.Fprint(os.Stderr, result.Stderr)
+	}
 
 	if err != nil {
 		return Result{
@@ -334,6 +347,11 @@ func (d *Dispatcher) executeRunTests(ctx context.Context, action Action) Result 
 	output, err := cmd.CombinedOutput()
 	outputStr := string(output)
 
+	// Always print output to user
+	if len(outputStr) > 0 {
+		fmt.Print(outputStr)
+	}
+
 	if err != nil {
 		return Result{
 			Action:  action,
@@ -370,6 +388,14 @@ func (d *Dispatcher) executeRunTestsSandboxed(ctx context.Context, action Action
 
 	result, err := d.sandbox.Execute(ctx, req)
 	outputStr := result.Stdout + "\n" + result.Stderr
+
+	// Always print output to user
+	if len(result.Stdout) > 0 {
+		fmt.Print(result.Stdout)
+	}
+	if len(result.Stderr) > 0 {
+		fmt.Fprint(os.Stderr, result.Stderr)
+	}
 
 	if err != nil {
 		return Result{
