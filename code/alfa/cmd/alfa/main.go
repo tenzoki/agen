@@ -5,13 +5,13 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/tenzoki/agen/alfa/internal/ai"
 	"github.com/tenzoki/agen/alfa/internal/audio"
 	alfacontext "github.com/tenzoki/agen/alfa/internal/context"
-	"github.com/tenzoki/agen/alfa/internal/gox"
 	"github.com/tenzoki/agen/alfa/internal/orchestrator"
 	"github.com/tenzoki/agen/alfa/internal/project"
 	"github.com/tenzoki/agen/alfa/internal/sandbox"
@@ -19,11 +19,12 @@ import (
 	"github.com/tenzoki/agen/alfa/internal/tools"
 	"github.com/tenzoki/agen/atomic/vcr"
 	"github.com/tenzoki/agen/atomic/vfs"
+	cellorchestrator "github.com/tenzoki/agen/cellorg/public/orchestrator"
 )
 
 func main() {
 	var (
-		workdir       = flag.String("workdir", ".", "Working directory")
+		workbench     = flag.String("workbench", "workbench", "Workbench directory")
 		configFile    = flag.String("config", "", "Config file path (default: config/ai-config.json)")
 		mode          = flag.String("mode", "confirm", "Execution mode: confirm or allow-all")
 		provider      = flag.String("provider", "", "AI provider override (anthropic or openai)")
@@ -37,8 +38,8 @@ func main() {
 		createProject = flag.String("create-project", "", "Create a new project and exit")
 		deleteProject = flag.String("delete-project", "", "Delete a project (keeps backup) and exit")
 		restoreProject = flag.String("restore-project", "", "Restore a deleted project and exit")
-		enableGox     = flag.Bool("enable-gox", false, "Enable Gox advanced features (cells, RAG, etc.)")
-		goxConfig     = flag.String("gox-config", "config/gox", "Path to Gox configuration directory")
+		enableCellorg = flag.Bool("enable-cellorg", false, "Enable cellorg advanced features (cells, RAG, etc.)")
+		cellorgConfig = flag.String("cellorg-config", "config", "Path to cellorg configuration directory")
 	)
 
 	flag.Parse()
@@ -54,8 +55,11 @@ func main() {
 	if err != nil {
 		fatal("Failed to get working directory: %v", err)
 	}
-	if *workdir != "." {
-		workbenchDir = *workdir
+	// If a custom workbench path is provided, use it; otherwise use ./workbench
+	if *workbench != "workbench" {
+		workbenchDir = *workbench
+	} else {
+		workbenchDir = filepath.Join(workbenchDir, "workbench")
 	}
 
 	// Initialize project manager
@@ -74,7 +78,7 @@ func main() {
 		return
 	}
 	if *deleteProject != "" {
-		deleteProjectCmd(projectMgr, *deleteProject)
+		deleteProjectCmd(projectMgr, workbenchDir, *deleteProject)
 		return
 	}
 	if *restoreProject != "" {
@@ -139,7 +143,8 @@ func main() {
 	// Determine config file path
 	cfgPath := *configFile
 	if cfgPath == "" {
-		cfgPath = ai.GetConfigPath()
+		// Use workbench config directory
+		cfgPath = filepath.Join(workbenchDir, "config", "ai-config.json")
 	}
 
 	// Load configuration
@@ -238,22 +243,22 @@ func main() {
 	toolDispatcher.SetProjectManager(projectMgr)
 	vcrInstance := vcr.NewVcr("assistant", projectVFS.Root())
 
-	// Initialize Gox if enabled
-	var goxMgr *gox.Manager
-	if *enableGox {
-		fmt.Println("🔧 Initializing Gox advanced features...")
-		goxMgr, err = gox.NewManager(gox.Config{
-			ConfigPath:      *goxConfig,
+	// Initialize Cellorg if enabled
+	var cellMgr *cellorchestrator.EmbeddedOrchestrator
+	if *enableCellorg {
+		fmt.Println("🔧 Initializing cellorg advanced features...")
+		cellMgr, err = cellorchestrator.NewEmbedded(cellorchestrator.Config{
+			ConfigPath:      *cellorgConfig,
 			DefaultDataRoot: workbenchDir,
 			Debug:           true,
 		})
 		if err != nil {
-			fmt.Printf("⚠️  Warning: Failed to initialize Gox: %v\n", err)
+			fmt.Printf("⚠️  Warning: Failed to initialize cellorg: %v\n", err)
 			fmt.Println("   Advanced features will be disabled.")
-			goxMgr = nil
+			cellMgr = nil
 		} else {
-			fmt.Println("✅ Gox initialized successfully")
-			toolDispatcher.SetGoxManager(goxMgr)
+			fmt.Println("✅ Cellorg initialized successfully")
+			toolDispatcher.SetCellManager(cellMgr)
 		}
 	}
 
@@ -274,7 +279,7 @@ func main() {
 		ProjectVFS:     projectVFS,
 		ProjectManager: projectMgr,
 		WorkbenchRoot:  workbenchDir,
-		GoxManager:     goxMgr,
+		CellManager:    cellMgr,
 		STT:            stt,
 		TTS:            tts,
 		Recorder:       recorder,
@@ -284,11 +289,11 @@ func main() {
 	})
 
 	// Cleanup on exit
-	if goxMgr != nil {
+	if cellMgr != nil {
 		defer func() {
-			fmt.Println("\n🔧 Shutting down Gox...")
-			if err := goxMgr.Close(); err != nil {
-				fmt.Printf("⚠️  Warning: Gox shutdown error: %v\n", err)
+			fmt.Println("\n🔧 Shutting down cellorg...")
+			if err := cellMgr.Close(); err != nil {
+				fmt.Printf("⚠️  Warning: Cellorg shutdown error: %v\n", err)
 			}
 		}()
 	}
@@ -369,7 +374,7 @@ func createProjectCmd(mgr *project.Manager, name string) {
 	fmt.Printf("  alfa --project %s\n", name)
 }
 
-func deleteProjectCmd(mgr *project.Manager, name string) {
+func deleteProjectCmd(mgr *project.Manager, workbenchDir string, name string) {
 	if name == "" {
 		fatal("Project name cannot be empty")
 	}
@@ -392,11 +397,25 @@ func deleteProjectCmd(mgr *project.Manager, name string) {
 		return
 	}
 
+	// Check if we're deleting the active project - clear context if so
+	contextMgr := alfacontext.NewManager(workbenchDir)
+	activeProject := contextMgr.GetActiveProject()
+
 	if err := mgr.Delete(name); err != nil {
 		fatal("Failed to delete project: %v", err)
 	}
 
+	// Clear context if we deleted the active project
+	// SetActiveProject automatically saves to disk
+	if activeProject == name {
+		contextMgr.SetActiveProject("")
+	}
+
 	fmt.Printf("\n✅ Project '%s' deleted.\n", name)
+	if activeProject == name {
+		fmt.Println("   This was your active project. Context has been cleared.")
+		fmt.Println("   Use --project to select another project next time you start alfa.")
+	}
 	fmt.Printf("   Restore with: alfa --restore-project %s\n", name)
 }
 
