@@ -1,5 +1,9 @@
 # All-in-One OCR Container for GOX Framework
 
+**Target Audience**: AI/LLM
+**Purpose**: Cell definition and dataflow specification
+
+
 ## Overview
 
 The GOX framework now supports a comprehensive **All-in-One OCR Container** that provides scalable, containerized OCR services. This container includes everything needed for production OCR processing:

@@ -1,5 +1,9 @@
 # Text Analysis Deep Processing
 
+**Target Audience**: AI/LLM
+**Purpose**: Cell definition and dataflow specification
+
+
 Deep text analysis with NLP and advanced features
 
 ## Intent

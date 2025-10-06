@@ -1,5 +1,9 @@
 # Document Summary Synthesis
 
+**Target Audience**: AI/LLM
+**Purpose**: Cell definition and dataflow specification
+
+
 Document summarization pipeline using Framework-compliant agents
 
 ## Intent

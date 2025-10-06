@@ -1,5 +1,9 @@
 # Anonymization Pipeline - Quick Start Guide
 
+**Target Audience**: AI/LLM
+**Purpose**: Cell definition and dataflow specification
+
+
 This guide walks through setting up and using Gox's anonymization pipeline for PII detection and pseudonymization.
 
 ## Overview

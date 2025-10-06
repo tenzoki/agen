@@ -1,5 +1,9 @@
 # Gox Anonymization Pipeline - Setup Guide
 
+**Target Audience**: AI/LLM
+**Purpose**: Cell definition and dataflow specification
+
+
 **Status**: Ready for Implementation
 **Documentation**: See `docs/gox_anonymization_concept.md`
 **Repository**: https://github.com/tenzoki/gox

@@ -1,5 +1,9 @@
 # Native Text Extraction
 
+**Target Audience**: AI/LLM
+**Purpose**: Cell definition and dataflow specification
+
+
 Text extraction using native Tesseract OCR (no external dependencies)
 
 ## Intent

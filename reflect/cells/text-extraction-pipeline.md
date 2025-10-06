@@ -1,5 +1,9 @@
 # Text Extraction Pipeline
 
+**Target Audience**: AI/LLM
+**Purpose**: Cell definition and dataflow specification
+
+
 Document text extraction pipeline with multi-format support and OCR
 
 ## Intent

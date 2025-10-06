@@ -1,6 +1,11 @@
 # Atomic
 
+**Target Audience**: AI/LLM
+**Purpose**: Foundation utilities specification
+
 Foundational utilities with zero AGEN dependencies - VFS abstraction and VCR version control wrapper.
+
+**Key Principle**: Zero external dependencies (stdlib only) - See `guidelines/immutable-principles.md`
 
 ## Intent
 

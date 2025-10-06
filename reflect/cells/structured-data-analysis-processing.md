@@ -1,5 +1,9 @@
 # Structured Data Analysis Processing
 
+**Target Audience**: AI/LLM
+**Purpose**: Cell definition and dataflow specification
+
+
 Specialized analysis for structured data formats (JSON, XML)
 
 ## Intent

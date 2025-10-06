@@ -1,5 +1,9 @@
 # NER Agent - Implementation Complete ✅
 
+**Target Audience**: AI/LLM
+**Purpose**: Cell definition and dataflow specification
+
+
 ## Summary
 
 The NER (Named Entity Recognition) agent is now fully implemented with real HuggingFace tokenizer integration and proper BIO tag decoding. The agent performs multilingual named entity recognition using the XLM-RoBERTa ONNX model.

@@ -1,5 +1,9 @@
 # Full Analysis Synthesis
 
+**Target Audience**: AI/LLM
+**Purpose**: Cell definition and dataflow specification
+
+
 Comprehensive synthesis pipeline with all available analyzers
 
 ## Intent

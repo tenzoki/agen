@@ -1,5 +1,9 @@
 # File Chunking Pipeline
 
+**Target Audience**: AI/LLM
+**Purpose**: Cell definition and dataflow specification
+
+
 Complete file chunking pipeline with splitting, processing, and synthesis
 
 ## Intent

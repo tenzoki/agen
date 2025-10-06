@@ -1,5 +1,9 @@
 # Reporting Synthesis
 
+**Target Audience**: AI/LLM
+**Purpose**: Cell definition and dataflow specification
+
+
 Comprehensive reporting pipeline for business intelligence
 
 ## Intent

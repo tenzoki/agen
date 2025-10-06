@@ -1,5 +1,9 @@
 # Research Paper Processing Pipeline
 
+**Target Audience**: AI/LLM
+**Purpose**: Cell definition and dataflow specification
+
+
 Specialized pipeline for academic research paper processing
 
 ## Intent

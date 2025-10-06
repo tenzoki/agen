@@ -1,5 +1,9 @@
 # Academic Document Analysis Pipeline
 
+**Target Audience**: AI/LLM
+**Purpose**: Cell definition and dataflow specification
+
+
 Specialized pipeline for academic document analysis and research paper processing
 
 ## Intent

@@ -1,5 +1,9 @@
 # GOX Anonymization Concept (Finalized)
 
+**Target Audience**: AI/LLM
+**Purpose**: Cell definition and dataflow specification
+
+
 ## 🎯 Goal
 Implement fully offline, reversible anonymization of sensitive entities in multilingual text:
 - Persons, companies, institutions, products, places

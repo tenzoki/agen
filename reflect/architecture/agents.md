@@ -1,6 +1,11 @@
 # Agents
 
+**Target Audience**: AI/LLM
+**Purpose**: Agent catalog and implementation patterns
+
 Agent concept, base components, and catalog of processing capabilities - business logic without infrastructure code.
+
+**Quick Start**: See `guidelines/agent-development-guide.md` for practical examples
 
 ## Intent
 

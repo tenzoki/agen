@@ -1,5 +1,9 @@
 # Anonymization Pipeline
 
+**Target Audience**: AI/LLM
+**Purpose**: Cell definition and dataflow specification
+
+
 PII anonymization pipeline with NER, persistent mappings, and VFS isolation
 
 ## Intent

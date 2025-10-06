@@ -1,5 +1,9 @@
 # Storage Cell
 
+**Target Audience**: AI/LLM
+**Purpose**: Cell definition and dataflow specification
+
+
 File processing cell that uses external storage service
 
 ## Intent

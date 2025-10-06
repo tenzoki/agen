@@ -1,5 +1,9 @@
 # HTTP OCR Extraction
 
+**Target Audience**: AI/LLM
+**Purpose**: Cell definition and dataflow specification
+
+
 Text extraction using containerized HTTP OCR service with await pattern
 
 ## Intent

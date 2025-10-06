@@ -1,5 +1,9 @@
 # Intelligent Document Processing Pipeline
 
+**Target Audience**: AI/LLM
+**Purpose**: Cell definition and dataflow specification
+
+
 Complete intelligent document processing with strategy selection and context enrichment
 
 ## Intent

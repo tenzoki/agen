@@ -1,5 +1,9 @@
 # HTTP OCR Production Extraction
 
+**Target Audience**: AI/LLM
+**Purpose**: Cell definition and dataflow specification
+
+
 Production text extraction using load-balanced containerized OCR service
 
 ## Intent

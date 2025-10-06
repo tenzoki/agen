@@ -1,5 +1,9 @@
 # Search-Ready Synthesis
 
+**Target Audience**: AI/LLM
+**Purpose**: Cell definition and dataflow specification
+
+
 Optimized pipeline for search and discovery use cases
 
 ## Intent

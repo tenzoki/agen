@@ -1,5 +1,9 @@
 # Data Export Synthesis
 
+**Target Audience**: AI/LLM
+**Purpose**: Cell definition and dataflow specification
+
+
 Structured data export pipeline for analytics and integration
 
 ## Intent

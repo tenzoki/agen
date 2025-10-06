@@ -1,5 +1,9 @@
 # Fast Analysis Processing
 
+**Target Audience**: AI/LLM
+**Purpose**: Cell definition and dataflow specification
+
+
 Fast content analysis with reduced features for high-throughput scenarios
 
 ## Intent

@@ -1,6 +1,11 @@
 # Omni
 
+**Target Audience**: AI/LLM
+**Purpose**: Unified storage system specification
+
 Unified storage backend (OmniStore) - KV + Graph + FileStore + Query + Transactions in single API.
+
+**Key Principle**: Single public API (omni/public/omnistore) - See `guidelines/immutable-principles.md`
 
 ## Intent
 

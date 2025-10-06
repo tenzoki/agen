@@ -1,5 +1,9 @@
 # Fast Document Processing Pipeline
 
+**Target Audience**: AI/LLM
+**Purpose**: Cell definition and dataflow specification
+
+
 Simplified document processing pipeline optimized for speed
 
 ## Intent

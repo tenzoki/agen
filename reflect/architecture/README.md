@@ -1,10 +1,20 @@
 # AGEN Architecture
 
+**Target Audience**: AI/LLM
+**Purpose**: System architecture overview and core design principles
+
 Multi-purpose AI workbench with cell-based processing, unified storage, and self-modifying capabilities.
+
+**Quick Reference**:
+- **Creating agents**: See `guidelines/agent-development-guide.md`
+- **Architecture rules**: See `guidelines/immutable-principles.md` (MUST READ before changes)
+- **Configuration**: See `guidelines/configuration-conventions.md`
 
 ## Intent
 
-AGEN is designed to enable AI systems to build, modify, and optimize complex workflows through a composable cell-based pattern. Core principles: **cells-first design**, **unified storage**, **agent modularity**, and **self-modification**.
+AGEN enables AI systems to build, modify, and optimize complex workflows through a composable cell-based pattern.
+
+**Core Principles**: Cells-first design · Unified storage · Agent modularity · Self-modification
 
 ## Core Design Principles
 

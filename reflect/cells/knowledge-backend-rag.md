@@ -1,5 +1,9 @@
 # Knowledge Backend RAG
 
+**Target Audience**: AI/LLM
+**Purpose**: Cell definition and dataflow specification
+
+
 RAG pipeline providing semantic code search and context retrieval for Alfa AI assistant
 
 ## Intent

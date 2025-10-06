@@ -1,5 +1,9 @@
 # Binary Media Analysis Processing
 
+**Target Audience**: AI/LLM
+**Purpose**: Cell definition and dataflow specification
+
+
 Specialized analysis for binary data and media files
 
 ## Intent

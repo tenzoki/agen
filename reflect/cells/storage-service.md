@@ -1,5 +1,9 @@
 # Storage Service
 
+**Target Audience**: AI/LLM
+**Purpose**: Cell definition and dataflow specification
+
+
 Storage service providing KV, graph, files, and full-text capabilities
 
 ## Intent

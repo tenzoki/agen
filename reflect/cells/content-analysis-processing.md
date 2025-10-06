@@ -1,5 +1,9 @@
 # Content Analysis Processing
 
+**Target Audience**: AI/LLM
+**Purpose**: Cell definition and dataflow specification
+
+
 Comprehensive content analysis for text, JSON, XML, binary, and image data
 
 ## Intent

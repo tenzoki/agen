@@ -1,5 +1,9 @@
 # File Transform Pipeline
 
+**Target Audience**: AI/LLM
+**Purpose**: Cell definition and dataflow specification
+
+
 File processing pipeline with ingestion, transformation, and output
 
 ## Intent
