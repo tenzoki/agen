@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/tenzoki/agen/cellorg/public/client"
+	"gopkg.in/yaml.v3"
 )
 
 // AgentFramework provides the complete agent runtime framework
@@ -74,6 +75,7 @@ func (f *AgentFramework) initializeBaseAgent() error {
 	// For standalone agents, GOX hostname must be explicitly specified
 	// Priority: command line args > environment variables
 	var goxHost string
+	var configFlag *string
 
 	// Check command line arguments first (highest priority)
 	var agentIDPtr *string
@@ -81,6 +83,7 @@ func (f *AgentFramework) initializeBaseAgent() error {
 		// Define the flags if they haven't been parsed yet
 		goxHostPtr := flag.String("gox-host", "", "GOX hostname (e.g., localhost)")
 		agentIDPtr = flag.String("agent-id", "", "Agent ID to match cell configuration (e.g., file-ingester-demo-001)")
+		configFlag = flag.String("config", "", "Configuration file path")
 		flag.Parse()
 		if goxHostPtr != nil && *goxHostPtr != "" {
 			goxHost = *goxHostPtr
@@ -123,6 +126,29 @@ func (f *AgentFramework) initializeBaseAgent() error {
 		log.Printf("HINT: Available agent IDs can be found in cells.yaml (e.g., file-ingester-demo-001, text-transformer-demo-001)")
 	}
 
+	// Load configuration file using StandardConfigResolver (AGEN convention)
+	var fileConfig map[string]interface{}
+	resolver := StandardConfigResolver{
+		AgentName:  agentType,
+		ConfigFlag: configFlag,
+	}
+
+	configPath, err := resolver.Resolve()
+	if err != nil {
+		log.Printf("Warning: Failed to resolve config path: %v", err)
+	}
+
+	if configPath != "" {
+		log.Printf("Loading configuration from: %s", configPath)
+		fileConfig, err = loadConfigFile(configPath)
+		if err != nil {
+			log.Printf("Warning: Failed to load config file %s: %v", configPath, err)
+			fileConfig = nil
+		} else {
+			log.Printf("Successfully loaded file configuration with %d keys", len(fileConfig))
+		}
+	}
+
 	// This config structure is identical across all agents
 	agentConfig := AgentConfig{
 		ID:             agentID,
@@ -136,6 +162,28 @@ func (f *AgentFramework) initializeBaseAgent() error {
 	baseAgent, err := NewBaseAgent(agentConfig)
 	if err != nil {
 		return err
+	}
+
+	// Merge file config with support service config
+	// Strategy: File config provides defaults, support service config overrides
+	if fileConfig != nil && len(fileConfig) > 0 {
+		// Start with file config as base
+		mergedConfig := make(map[string]interface{})
+		for k, v := range fileConfig {
+			mergedConfig[k] = v
+		}
+
+		// Override with support service config
+		for k, v := range baseAgent.Config {
+			mergedConfig[k] = v
+		}
+
+		// Replace agent config with merged version
+		baseAgent.Config = mergedConfig
+
+		if debug {
+			log.Printf("Merged file config with support service config (support service wins)")
+		}
 	}
 
 	f.baseAgent = baseAgent
@@ -307,4 +355,21 @@ func (f *AgentFramework) handleShutdown(msgChan <-chan *client.BrokerMessage) er
 func Run(runner AgentRunner, agentType string) error {
 	framework := NewFramework(runner, agentType)
 	return framework.Run()
+}
+
+// --- CONFIGURATION HELPERS ---
+
+// loadConfigFile loads a YAML configuration file and returns it as a map
+func loadConfigFile(path string) (map[string]interface{}, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read config file: %w", err)
+	}
+
+	var config map[string]interface{}
+	if err := yaml.Unmarshal(data, &config); err != nil {
+		return nil, fmt.Errorf("failed to parse YAML config: %w", err)
+	}
+
+	return config, nil
 }
