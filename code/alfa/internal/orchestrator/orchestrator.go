@@ -361,6 +361,18 @@ func (o *Orchestrator) executeAction(ctx context.Context, action Action) tools.R
 			}
 		}
 
+		// Check if we deleted the active project - clear context if so
+		if result.Success && action.Type == "delete_project" {
+			if deletedName, ok := action.Params["name"].(string); ok {
+				currentProject := o.contextMgr.GetActiveProject()
+				if currentProject == deletedName {
+					// Clear active project since it was just deleted
+					o.contextMgr.SetActiveProject("")
+					result.Message += "\n\nNote: This was your active project. Please use --project to select another project next time you start alfa."
+				}
+			}
+		}
+
 		return result
 	default:
 		return tools.Result{

@@ -132,7 +132,14 @@ func (m *Manager) Create(name string) error {
 		return fmt.Errorf("failed to initialize git: %w", err)
 	}
 
-	// Create bare remote repo directory first
+	// If a backup exists from a previously deleted project, remove it
+	if _, err := os.Stat(remotePath); err == nil {
+		if err := os.RemoveAll(remotePath); err != nil {
+			return fmt.Errorf("failed to remove old backup: %w", err)
+		}
+	}
+
+	// Create bare remote repo directory
 	if err := os.MkdirAll(remotePath, 0755); err != nil {
 		return fmt.Errorf("failed to create bare remote directory: %w", err)
 	}
