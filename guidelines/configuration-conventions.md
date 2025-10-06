@@ -246,5 +246,5 @@ unset AGEN_WORKBENCH_DIR
 ## See Also
 
 - [workbench/config/README.md](../workbench/config/README.md) - Configuration file formats
-- [reflect/immutable-principles.md](./immutable-principles.md) - Core AGEN principles
-  - [cellorg/public/agent/config.go](../code/cellorg/public/agent/config.go) - StandardConfigResolver implementation
+- [immutable-principles.md](./immutable-principles.md) - Core AGEN principles
+- [cellorg/public/agent/config.go](../code/cellorg/public/agent/config.go) - StandardConfigResolver implementation
