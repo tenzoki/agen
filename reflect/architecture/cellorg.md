@@ -5,7 +5,7 @@
 
 Cell-based orchestration framework - cells as core units for AI operations, agent framework, and distributed coordination.
 
-**Key Concept**: Cells-first architecture - See `guidelines/immutable-principles.md`
+**Key Concept**: Cells-first architecture - See `guidelines/references/architecture.md`
 
 ## Intent
 

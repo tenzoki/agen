@@ -5,7 +5,7 @@
 
 Unified storage backend (OmniStore) - KV + Graph + FileStore + Query + Transactions in single API.
 
-**Key Principle**: Single public API (omni/public/omnistore) - See `guidelines/immutable-principles.md`
+**Key Principle**: Single public API (omni/public/omnistore) - See `guidelines/references/architecture.md`
 
 ## Intent
 

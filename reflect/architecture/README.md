@@ -6,9 +6,9 @@
 Multi-purpose AI workbench with cell-based processing, unified storage, and self-modifying capabilities.
 
 **Quick Reference**:
-- **Creating agents**: See `guidelines/agent-development-guide.md`
-- **Architecture rules**: See `guidelines/immutable-principles.md` (MUST READ before changes)
-- **Configuration**: See `guidelines/configuration-conventions.md`
+- **Creating agents**: See `guidelines/references/agent-patterns.md`
+- **Architecture rules**: See `guidelines/references/architecture.md` (MUST READ before changes)
+- **Configuration**: See `guidelines/references/config-standards.md`
 
 ## Intent
 

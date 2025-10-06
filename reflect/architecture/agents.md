@@ -5,7 +5,7 @@
 
 Agent concept, base components, and catalog of processing capabilities - business logic without infrastructure code.
 
-**Quick Start**: See `guidelines/agent-development-guide.md` for practical examples
+**Quick Start**: See `guidelines/references/agent-patterns.md` for practical examples
 
 ## Intent
 

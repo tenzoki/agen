@@ -5,7 +5,7 @@
 
 Foundational utilities with zero AGEN dependencies - VFS abstraction and VCR version control wrapper.
 
-**Key Principle**: Zero external dependencies (stdlib only) - See `guidelines/immutable-principles.md`
+**Key Principle**: Zero external dependencies (stdlib only) - See `guidelines/references/architecture.md`
 
 ## Intent
 
