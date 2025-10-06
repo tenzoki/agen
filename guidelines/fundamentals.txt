@@ -12,14 +12,18 @@ This folder contains operational and collaboration instructions for both AI and 
 
 If you are an LLM (AI agent):
 	•	This file: Overview and operational rules
-	•	Essential reading:
-		•	guidelines/immutable-principles.md - Architecture principles (MUST READ before changes)
-		•	guidelines/agent-development-guide.md - Creating agents
-		•	guidelines/configuration-conventions.md - Config standards
+	•	ALWAYS LOADED: guidelines/core-rules.txt - Quick reference (in system prompt)
+	•	Detailed references (use read_file to consult):
+		•	guidelines/references/architecture.md - Architecture principles
+		•	guidelines/references/agent-patterns.md - Agent development
+		•	guidelines/references/config-standards.md - Configuration standards
+		•	guidelines/references/testing.md - Testing patterns
+	•	Current work:
 		•	guidelines/tasks.txt - Current tasks
 		•	guidelines/progress.txt - Recent changes history
-	•	Architecture: reflect/architecture/
-	•	Cell definitions: reflect/cells/
+	•	Documentation:
+		•	reflect/architecture/ - Module documentation
+		•	reflect/cells/ - Cell definitions
 
 ⸻
 
@@ -174,12 +178,17 @@ You may:
 	•	Update and optimize READMEs (using the shared template).
 
 Crucial constraint:
-	•	Changes you consider must always be fully compliant with the fundamental architecture principles as described in: guidelines/immutable-principles.md
-	•	Check that file before the change!
+	•	Changes you consider must always be fully compliant with the fundamental architecture principles
+	•	Core rules are loaded in your system prompt (guidelines/core-rules.txt)
+	•	Consult detailed references BEFORE making changes:
+		•	use read_file("guidelines/references/architecture.md")
+		•	use read_file("guidelines/references/agent-patterns.md")
+		•	use read_file("guidelines/references/config-standards.md")
 
 You must not:
 	•	Your changes must not violate the fundamental principles in any way!
-		•	Always check compliance against these rules as described in: guidelines/immutable-principles.md
+		•	Core rules are in your system prompt
+		•	When in doubt, read guidelines/references/architecture.md
 	•	Modify the main runtime (alfa) without approval.
 	•	Alter the core cell orchestration pattern.
 

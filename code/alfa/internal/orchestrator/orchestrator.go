@@ -713,6 +713,33 @@ Example workflow with cells:
 		return ""
 	}() + `
 
+` + func() string {
+		// Load core framework rules if available
+		coreRulesPath := filepath.Join(o.workbenchRoot, "../guidelines/core-rules.txt")
+		content, err := os.ReadFile(coreRulesPath)
+		if err != nil {
+			// Core rules not found - not critical, continue without them
+			return ""
+		}
+		return `
+═══════════════════════════════════════════════════
+FRAMEWORK MODIFICATION RULES
+═══════════════════════════════════════════════════
+
+` + string(content) + `
+
+BEFORE modifying framework code (code/), ALWAYS:
+1. Use read_file to consult relevant reference:
+   - Architecture changes: read_file("guidelines/references/architecture.md")
+   - Adding agent: read_file("guidelines/references/agent-patterns.md")
+   - Config changes: read_file("guidelines/references/config-standards.md")
+2. Verify compliance with core rules above
+3. If uncertain, ask the user before proceeding
+
+═══════════════════════════════════════════════════
+
+`
+	}() + `
 GUIDELINES:
 - Always explain your reasoning before taking actions
 - Test changes after modifications

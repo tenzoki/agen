@@ -1,0 +1,218 @@
+AGEN CORE RULES (v1.0)
+
+Intended Audience: AI/LLM
+Purpose: Quick reference for framework modification decisions
+Full Details: guidelines/references/
+
+═══════════════════════════════════════════════════
+IMMUTABLE ARCHITECTURE PRINCIPLES
+═══════════════════════════════════════════════════
+
+1. CELLS-FIRST DESIGN
+   ✓ Agents are leaves, not roots
+   ✓ Compose capabilities via cells (YAML pipelines)
+   ✗ Never create monolithic agents
+
+   Details: guidelines/references/architecture.md
+
+2. ZERO EXTERNAL DEPENDENCIES (atomic/)
+   ✓ atomic/ must remain stdlib-only
+   ✓ Foundation for VFS, VCR - cannot break
+   ✗ Adding deps to atomic/ breaks entire framework
+
+   Details: guidelines/references/architecture.md
+
+3. THREE-METHOD AGENT INTERFACE
+   ✓ Initialize(support.ServiceRegistry) error
+   ✓ ProcessEnvelope(context.Context, *envelope.Envelope) error
+   ✓ Shutdown() error
+   ✗ No other methods required - framework handles infrastructure
+
+   Details: guidelines/references/agent-patterns.md
+
+4. STANDARD CONFIGURATION RESOLUTION
+   ✓ All binaries follow 7-level resolution:
+     1. --config flag
+     2. AGEN_CONFIG_PATH env
+     3. AGEN_WORKBENCH_DIR/config/agents/<name>.yaml
+     4. ./config/<name>.yaml
+     5. ./workbench/config/agents/<name>.yaml
+     6. <binary-dir>/config/<name>.yaml
+     7. Embedded defaults
+   ✓ Use agent.NewStandardConfigResolver()
+   ✗ Never hardcode config paths
+
+   Details: guidelines/references/config-standards.md
+
+5. VFS ISOLATION
+   ✓ Project context = workbench/projects/<name>/ ONLY
+   ✓ Workbench context = workbench/config/, workbench/demos/
+   ✓ Framework context = full repo (self-modification)
+   ✗ Never mix contexts -严重安全问题
+
+   Details: guidelines/references/architecture.md
+
+6. VCR THREE-TIER SYSTEM
+   ✓ Framework VCR = agen/.git (code changes)
+   ✓ Workbench VCR = workbench/.git (config/demos)
+   ✓ Project VCR = projects/<name>/.git (user code)
+   ✓ Backups = .git-remotes/<name>.git (recovery)
+   ✗ Never commit across VCR boundaries
+
+   Details: guidelines/references/architecture.md
+
+═══════════════════════════════════════════════════
+DECISION TREE
+═══════════════════════════════════════════════════
+
+CAN I ADD A NEW AGENT?
+  ✓ YES
+  → Read guidelines/references/agent-patterns.md
+  → Use 3-method interface
+  → Add to workbench/config/pool.yaml
+  → Follow StandardConfigResolver
+  → Include embedded defaults
+
+CAN I MODIFY atomic/?
+  ⚠️  EXTREME CAUTION
+  → MUST remain zero external dependencies
+  → Read guidelines/references/architecture.md
+  → Understand impact on VFS/VCR
+  → Test extensively
+
+CAN I CHANGE CONFIGURATION RESOLUTION?
+  ✗ NO - Standardized across all binaries
+  → If improving: Update cellorg/public/agent/config.go
+  → All agents automatically benefit
+
+CAN I ADD EXTERNAL DEPENDENCY?
+  ✓ YES in: agents/, cellorg/, omni/, alfa/
+  ✗ NO in: atomic/
+  → Use go.mod in appropriate module
+  → Update go.work if needed
+
+CAN I CREATE A NEW MODULE?
+  ✓ YES
+  → Read guidelines/references/architecture.md
+  → Follow module layering (atomic → omni → cellorg → agents)
+  → Create go.mod
+  → Add to go.work
+  → Document in module's README.md
+
+CAN I MODIFY ALFA (AI WORKBENCH)?
+  ⚠️  REQUIRES APPROVAL
+  → Core runtime changes need human review
+  → Tools, actions = OK
+  → System prompt changes = OK
+  → Architecture changes = ASK FIRST
+
+CAN I CHANGE CELL ORCHESTRATION?
+  ⚠️  REQUIRES APPROVAL
+  → Core pattern is fundamental to AGEN
+  → Read guidelines/references/architecture.md
+  → Discuss before implementing
+
+═══════════════════════════════════════════════════
+MANDATORY CHECKS BEFORE COMMIT
+═══════════════════════════════════════════════════
+
+PRE-COMMIT CHECKLIST:
+  □ Code compiles (go build succeeds)
+  □ Tests written for new functionality
+  □ All tests pass (go test ./...)
+  □ Follows 3-method pattern (if agent)
+  □ Uses StandardConfigResolver (if new binary)
+  □ Updated relevant README.md
+  □ No new dependencies in atomic/
+  □ VFS isolation maintained
+  □ Configuration follows 7-level resolution
+  □ Embedded defaults provided (if binary)
+
+COMMIT MESSAGE FORMAT:
+  - Be descriptive and concise
+  - Include "Fix:", "Add:", "Update:" prefix
+  - Add 🤖 Generated with Claude Code footer
+  - Use Co-Authored-By: Claude <noreply@anthropic.com>
+
+VERSIONING:
+  <major>.<feature>.<patch>
+  - major: Only with explicit approval
+  - feature: New agents, cells, modules
+  - patch: Bug fixes, tests, docs
+
+═══════════════════════════════════════════════════
+COMMON PATTERNS
+═══════════════════════════════════════════════════
+
+CREATING AN AGENT:
+  1. Read guidelines/references/agent-patterns.md
+  2. Create code/agents/<name>/main.go
+  3. Implement 3 methods
+  4. Add StandardConfigResolver
+  5. Provide embedded defaults
+  6. Add to workbench/config/pool.yaml
+  7. Write tests
+  8. Build and test
+
+MODIFYING FRAMEWORK:
+  1. Read guidelines/references/architecture.md
+  2. Verify compliance with principles
+  3. Check module layering
+  4. Run all tests
+  5. Update documentation
+  6. Commit with clear message
+
+ADDING CONFIGURATION:
+  1. Read guidelines/references/config-standards.md
+  2. Place in workbench/config/ or workbench/config/agents/
+  3. Document in workbench/config/README.md
+  4. Provide embedded defaults in binary
+  5. Test all 7 resolution levels
+
+═══════════════════════════════════════════════════
+DETAILED REFERENCES (Use read_file)
+═══════════════════════════════════════════════════
+
+Architecture & Principles:
+  guidelines/references/architecture.md
+  - Module layering
+  - Zero-dep requirement
+  - VFS/VCR systems
+  - Cells-first design
+
+Agent Development:
+  guidelines/references/agent-patterns.md
+  - 3-method interface details
+  - Storage patterns
+  - Configuration examples
+  - Testing patterns
+
+Configuration Standards:
+  guidelines/references/config-standards.md
+  - 7-level resolution details
+  - Directory structure
+  - Environment variables
+  - StandardConfigResolver implementation
+
+Testing Patterns:
+  guidelines/references/testing.md
+  - Test organization
+  - Coverage requirements
+  - Integration tests
+  - CI/CD patterns
+
+═══════════════════════════════════════════════════
+CRITICAL REMINDERS
+═══════════════════════════════════════════════════
+
+⚠️  BEFORE ANY FRAMEWORK MODIFICATION:
+   Use read_file to consult the relevant reference guide
+
+⚠️  WHEN IN DOUBT:
+   Read guidelines/references/architecture.md
+
+⚠️  BREAKING THESE RULES:
+   Will likely break the framework or violate design principles
+
+✓  THESE RULES EXIST TO:
+   Maintain architectural integrity during self-modification
