@@ -1,0 +1,38 @@
+# Cellorg Configuration
+# Main orchestrator configuration for AGEN
+
+app_name: "cellorg-app"
+debug: true
+
+# Self-modification settings (AGEN can modify its own code)
+self_modification:
+  enabled: true
+  require_tests: true        # Run tests before committing
+  auto_commit: true          # Auto-commit successful changes
+
+# Support service (agent registry and health monitoring)
+support:
+  port: ":9000"
+  debug: true
+
+# Broker service (message routing and pub/sub)
+broker:
+  port: ":9001"
+  protocol: "tcp" # tcp | uds
+  codec: "json"
+  debug: true
+
+# Base directory for relative paths (relative to this config file)
+basedir:
+  - "."
+
+# Agent type definitions
+pool:
+  - "pool.yaml"
+
+# Cell definitions (modular YAML files)
+cells:
+  - "cells/*.yaml"
+
+await-timeout_seconds: 300
+await_support_reboot_seconds: 300
