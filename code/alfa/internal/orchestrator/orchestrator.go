@@ -13,13 +13,13 @@ import (
 	"github.com/tenzoki/agen/alfa/internal/ai"
 	"github.com/tenzoki/agen/alfa/internal/audio"
 	alfacontext "github.com/tenzoki/agen/alfa/internal/context"
-	"github.com/tenzoki/agen/alfa/internal/gox"
 	"github.com/tenzoki/agen/alfa/internal/project"
 	"github.com/tenzoki/agen/alfa/internal/speech"
 	"github.com/tenzoki/agen/alfa/internal/textpatch"
 	"github.com/tenzoki/agen/alfa/internal/tools"
 	"github.com/tenzoki/agen/atomic/vcr"
 	"github.com/tenzoki/agen/atomic/vfs"
+	cellorchestrator "github.com/tenzoki/agen/cellorg/public/orchestrator"
 )
 
 // Mode represents the execution mode
@@ -39,7 +39,7 @@ type Orchestrator struct {
 	projectVFS     *vfs.VFS
 	projectManager *project.Manager
 	workbenchRoot  string
-	goxManager     *gox.Manager
+	cellManager    *cellorchestrator.EmbeddedOrchestrator
 
 	stt      speech.STT
 	tts      speech.TTS
@@ -62,7 +62,7 @@ type Config struct {
 	ProjectVFS     *vfs.VFS
 	ProjectManager *project.Manager
 	WorkbenchRoot  string
-	GoxManager     *gox.Manager
+	CellManager    *cellorchestrator.EmbeddedOrchestrator
 	STT            speech.STT
 	TTS            speech.TTS
 	Recorder       audio.Recorder
@@ -85,7 +85,7 @@ func New(cfg Config) *Orchestrator {
 		projectVFS:     cfg.ProjectVFS,
 		projectManager: cfg.ProjectManager,
 		workbenchRoot:  cfg.WorkbenchRoot,
-		goxManager:     cfg.GoxManager,
+		cellManager:    cfg.CellManager,
 		stt:            cfg.STT,
 		tts:            cfg.TTS,
 		recorder:       cfg.Recorder,
@@ -506,7 +506,7 @@ func (o *Orchestrator) generateCommitMessage(actions []Action, results []tools.R
 
 // buildSystemPrompt constructs the system prompt
 func (o *Orchestrator) buildSystemPrompt() string {
-	goxAvailable := o.goxManager != nil
+	cellorgAvailable := o.cellManager != nil
 
 	capabilities := `You are an AI coding assistant with access to tools and the ability to modify code.
 
@@ -517,9 +517,9 @@ CAPABILITIES:
 4. Search through the codebase
 5. Generate git commits for changes`
 
-	if goxAvailable {
+	if cellorgAvailable {
 		capabilities += `
-6. Start and manage Gox cells for advanced workflows
+6. Start and manage cells for advanced workflows
 7. Query RAG systems for semantic code search
 8. Coordinate multi-agent processing pipelines
 9. Extract named entities from text (NER) in 100+ languages
@@ -550,11 +550,11 @@ Project Management:
 - restore_project: Restore a deleted project from backup
 - switch_project: Request to switch to another project` +
 	func() string {
-		if goxAvailable {
+		if cellorgAvailable {
 			return `
 
-Advanced Features (Gox Cells):
-- start_cell: Start a Gox cell for advanced workflows
+Advanced Features (Cellorg Cells):
+- start_cell: Start a cell for advanced workflows
 - stop_cell: Stop a running cell
 - list_cells: List all running cells
 - query_cell: Send a query to a cell and wait for response
@@ -637,10 +637,10 @@ PROJECT MANAGEMENT FORMATS:
 
 IMPORTANT: After creating or switching projects, all subsequent operations will work on the new project automatically.
 ` + "```" + func() string {
-		if goxAvailable {
+		if cellorgAvailable {
 			return `
 
-GOX CELL MANAGEMENT FORMATS:
+CELLORG CELL MANAGEMENT FORMATS:
 
 Start a cell:
 ` + "```json" + `
@@ -711,7 +711,11 @@ GUIDELINES:
 IMPORTANT: All file operations are sandboxed to the project directory.
 You cannot access files outside the project.
 
+CURRENT PROJECT: ` + o.contextMgr.GetActiveProject() + `
 Project root: ` + o.projectVFS.Root() + `
+
+NOTE: When asked to "create an app" or "create a file", create it in the CURRENT PROJECT above.
+Only use "create_project" action when EXPLICITLY asked to create a NEW project with a different name.
 `
 }
 
