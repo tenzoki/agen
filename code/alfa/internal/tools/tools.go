@@ -9,10 +9,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/tenzoki/agen/alfa/internal/gox"
 	"github.com/tenzoki/agen/alfa/internal/project"
 	"github.com/tenzoki/agen/alfa/internal/sandbox"
 	"github.com/tenzoki/agen/atomic/vfs"
+	cellorchestrator "github.com/tenzoki/agen/cellorg/public/orchestrator"
 )
 
 // Dispatcher executes tool operations
@@ -20,9 +20,11 @@ type Dispatcher struct {
 	vfs            *vfs.VFS
 	sandbox        sandbox.Sandbox
 	projectManager *project.Manager
-	goxManager     *gox.Manager
+	cellManager    *cellorchestrator.EmbeddedOrchestrator
 	timeout        time.Duration
 	useSandbox     bool
+	captureOutput  bool
+	maxOutputBytes int
 }
 
 // NewDispatcher creates a new tool dispatcher with VFS
@@ -33,11 +35,38 @@ func NewDispatcher(projectVFS *vfs.VFS) *Dispatcher {
 // NewDispatcherWithSandbox creates a dispatcher with optional sandbox
 func NewDispatcherWithSandbox(projectVFS *vfs.VFS, sb sandbox.Sandbox, useSandbox bool) *Dispatcher {
 	return &Dispatcher{
-		vfs:        projectVFS,
-		sandbox:    sb,
-		timeout:    30 * time.Second,
-		useSandbox: useSandbox,
+		vfs:            projectVFS,
+		sandbox:        sb,
+		timeout:        30 * time.Second,
+		useSandbox:     useSandbox,
+		captureOutput:  true,        // Capture output by default
+		maxOutputBytes: 10 * 1024,   // 10KB default limit
 	}
+}
+
+// SetOutputCapture configures output capture behavior
+func (d *Dispatcher) SetOutputCapture(enabled bool, maxBytes int) {
+	d.captureOutput = enabled
+	if maxBytes > 0 {
+		d.maxOutputBytes = maxBytes
+	}
+}
+
+// processOutput handles output according to capture settings
+func (d *Dispatcher) processOutput(output string) interface{} {
+	if !d.captureOutput {
+		return nil
+	}
+
+	if len(output) <= d.maxOutputBytes {
+		return output
+	}
+
+	// Truncate and add notice
+	truncated := output[:d.maxOutputBytes]
+	remaining := len(output) - d.maxOutputBytes
+	return fmt.Sprintf("%s\n\n[Output truncated: %d more bytes not shown. Use --max-output to increase limit.]",
+		truncated, remaining)
 }
 
 // SetProjectManager sets the project manager for project operations
@@ -45,9 +74,9 @@ func (d *Dispatcher) SetProjectManager(pm *project.Manager) {
 	d.projectManager = pm
 }
 
-// SetGoxManager sets the gox manager for cell operations
-func (d *Dispatcher) SetGoxManager(gm *gox.Manager) {
-	d.goxManager = gm
+// SetCellManager sets the cell manager for cell operations
+func (d *Dispatcher) SetCellManager(cm *cellorchestrator.EmbeddedOrchestrator) {
+	d.cellManager = cm
 }
 
 // GetSandbox returns the sandbox instance
@@ -215,15 +244,22 @@ func (d *Dispatcher) executeRunCommand(ctx context.Context, action Action) Resul
 			Action:  action,
 			Success: false,
 			Message: fmt.Sprintf("command failed: %v", err),
-			Output:  outputStr,
+			Output:  d.processOutput(outputStr),
 		}
+	}
+
+	message := "Command executed successfully"
+	if !d.captureOutput {
+		message = "Command executed successfully (output not captured)"
+	} else if len(outputStr) > d.maxOutputBytes {
+		message = fmt.Sprintf("Command executed successfully (output truncated to %d bytes)", d.maxOutputBytes)
 	}
 
 	return Result{
 		Action:  action,
 		Success: true,
-		Message: fmt.Sprintf("Command executed successfully"),
-		Output:  outputStr,
+		Message: message,
+		Output:  d.processOutput(outputStr),
 	}
 }
 
@@ -238,13 +274,14 @@ func (d *Dispatcher) executeRunCommandSandboxed(ctx context.Context, action Acti
 	}
 
 	result, err := d.sandbox.Execute(ctx, req)
+	outputStr := result.Stdout + "\n" + result.Stderr
 
 	if err != nil {
 		return Result{
 			Action:  action,
 			Success: false,
 			Message: fmt.Sprintf("sandboxed execution failed: %v", err),
-			Output:  result.Stdout + "\n" + result.Stderr,
+			Output:  d.processOutput(outputStr),
 		}
 	}
 
@@ -253,15 +290,23 @@ func (d *Dispatcher) executeRunCommandSandboxed(ctx context.Context, action Acti
 			Action:  action,
 			Success: false,
 			Message: fmt.Sprintf("command exited with code %d", result.ExitCode),
-			Output:  result.Stdout + "\n" + result.Stderr,
+			Output:  d.processOutput(outputStr),
 		}
+	}
+
+	message := fmt.Sprintf("Sandboxed execution completed in %v", result.Duration)
+	if !d.captureOutput {
+		message += " (output not captured)"
+	} else if len(result.Stdout) > d.maxOutputBytes {
+		message = fmt.Sprintf("Sandboxed execution completed in %v (output truncated to %d bytes)",
+			result.Duration, d.maxOutputBytes)
 	}
 
 	return Result{
 		Action:  action,
 		Success: true,
-		Message: fmt.Sprintf("Sandboxed execution completed in %v", result.Duration),
-		Output:  result.Stdout,
+		Message: message,
+		Output:  d.processOutput(result.Stdout),
 	}
 }
 
@@ -294,15 +339,22 @@ func (d *Dispatcher) executeRunTests(ctx context.Context, action Action) Result 
 			Action:  action,
 			Success: false,
 			Message: "Tests failed",
-			Output:  outputStr,
+			Output:  d.processOutput(outputStr),
 		}
+	}
+
+	message := "All tests passed"
+	if !d.captureOutput {
+		message = "All tests passed (output not captured)"
+	} else if len(outputStr) > d.maxOutputBytes {
+		message = fmt.Sprintf("All tests passed (output truncated to %d bytes)", d.maxOutputBytes)
 	}
 
 	return Result{
 		Action:  action,
 		Success: true,
-		Message: "All tests passed",
-		Output:  outputStr,
+		Message: message,
+		Output:  d.processOutput(outputStr),
 	}
 }
 
@@ -317,13 +369,14 @@ func (d *Dispatcher) executeRunTestsSandboxed(ctx context.Context, action Action
 	}
 
 	result, err := d.sandbox.Execute(ctx, req)
+	outputStr := result.Stdout + "\n" + result.Stderr
 
 	if err != nil {
 		return Result{
 			Action:  action,
 			Success: false,
 			Message: fmt.Sprintf("sandboxed test execution failed: %v", err),
-			Output:  result.Stdout + "\n" + result.Stderr,
+			Output:  d.processOutput(outputStr),
 		}
 	}
 
@@ -332,15 +385,23 @@ func (d *Dispatcher) executeRunTestsSandboxed(ctx context.Context, action Action
 			Action:  action,
 			Success: false,
 			Message: "Tests failed",
-			Output:  result.Stdout + "\n" + result.Stderr,
+			Output:  d.processOutput(outputStr),
 		}
+	}
+
+	message := fmt.Sprintf("All tests passed (sandboxed, %v)", result.Duration)
+	if !d.captureOutput {
+		message += " (output not captured)"
+	} else if len(result.Stdout) > d.maxOutputBytes {
+		message = fmt.Sprintf("All tests passed (sandboxed, %v, output truncated to %d bytes)",
+			result.Duration, d.maxOutputBytes)
 	}
 
 	return Result{
 		Action:  action,
 		Success: true,
-		Message: fmt.Sprintf("All tests passed (sandboxed, %v)", result.Duration),
-		Output:  result.Stdout,
+		Message: message,
+		Output:  d.processOutput(result.Stdout),
 	}
 }
 
@@ -623,13 +684,13 @@ func (d *Dispatcher) executeSwitchProject(action Action) Result {
 	}
 }
 
-// executeStartCell starts a Gox cell for a project
+// executeStartCell starts a cell for a project
 func (d *Dispatcher) executeStartCell(ctx context.Context, action Action) Result {
-	if d.goxManager == nil {
+	if d.cellManager == nil {
 		return Result{
 			Action:  action,
 			Success: false,
-			Message: "Gox is not available. Advanced features are disabled.",
+			Message: "Cellorg is not available. Advanced features are disabled.",
 		}
 	}
 
@@ -664,8 +725,15 @@ func (d *Dispatcher) executeStartCell(ctx context.Context, action Action) Result
 		}
 	}
 
+	// Create cell options
+	opts := cellorchestrator.CellOptions{
+		ProjectID:   projectID,
+		VFSRoot:     vfsRoot,
+		Environment: env,
+	}
+
 	// Start cell
-	err := d.goxManager.StartCell(cellID, projectID, vfsRoot, env)
+	err := d.cellManager.StartCell(cellID, opts)
 	if err != nil {
 		return Result{
 			Action:  action,
@@ -688,11 +756,11 @@ func (d *Dispatcher) executeStartCell(ctx context.Context, action Action) Result
 
 // executeStopCell stops a running cell
 func (d *Dispatcher) executeStopCell(action Action) Result {
-	if d.goxManager == nil {
+	if d.cellManager == nil {
 		return Result{
 			Action:  action,
 			Success: false,
-			Message: "Gox is not available",
+			Message: "Cellorg is not available",
 		}
 	}
 
@@ -714,7 +782,7 @@ func (d *Dispatcher) executeStopCell(action Action) Result {
 		}
 	}
 
-	err := d.goxManager.StopCell(cellID, projectID)
+	err := d.cellManager.StopCell(cellID, projectID)
 	if err != nil {
 		return Result{
 			Action:  action,
@@ -732,7 +800,7 @@ func (d *Dispatcher) executeStopCell(action Action) Result {
 
 // executeListCells lists all running cells
 func (d *Dispatcher) executeListCells(action Action) Result {
-	if d.goxManager == nil {
+	if d.cellManager == nil {
 		return Result{
 			Action:  action,
 			Success: true,
@@ -741,7 +809,7 @@ func (d *Dispatcher) executeListCells(action Action) Result {
 		}
 	}
 
-	cells := d.goxManager.ListCells()
+	cells := d.cellManager.ListCells()
 
 	cellsOutput := make([]map[string]interface{}, 0, len(cells))
 	for _, cell := range cells {
@@ -763,11 +831,11 @@ func (d *Dispatcher) executeListCells(action Action) Result {
 
 // executeQueryCell sends a query to a cell and waits for response
 func (d *Dispatcher) executeQueryCell(ctx context.Context, action Action) Result {
-	if d.goxManager == nil {
+	if d.cellManager == nil {
 		return Result{
 			Action:  action,
 			Success: false,
-			Message: "Gox is not available",
+			Message: "Cellorg is not available",
 		}
 	}
 
@@ -821,7 +889,7 @@ func (d *Dispatcher) executeQueryCell(ctx context.Context, action Action) Result
 	}
 
 	// Send query and wait for response
-	event, err := d.goxManager.PublishAndWait(requestTopic, responseTopic, queryData, timeout)
+	event, err := d.cellManager.PublishAndWait(requestTopic, responseTopic, queryData, timeout)
 	if err != nil {
 		return Result{
 			Action:  action,
@@ -840,11 +908,11 @@ func (d *Dispatcher) executeQueryCell(ctx context.Context, action Action) Result
 
 // executeExtractEntities extracts named entities from text using NER cell
 func (d *Dispatcher) executeExtractEntities(ctx context.Context, action Action) Result {
-	if d.goxManager == nil {
+	if d.cellManager == nil {
 		return Result{
 			Action:  action,
 			Success: false,
-			Message: "Gox is not available. Named entity recognition requires --enable-gox flag.",
+			Message: "Cellorg is not available. Named entity recognition requires --enable-cellorg flag.",
 		}
 	}
 
@@ -864,7 +932,7 @@ func (d *Dispatcher) executeExtractEntities(ctx context.Context, action Action) 
 
 	// Ensure NER cell is started
 	cellID := "nlp:entity-extraction"
-	cells := d.goxManager.ListCells()
+	cells := d.cellManager.ListCells()
 	cellRunning := false
 	for _, cell := range cells {
 		if cell.CellID == cellID && cell.ProjectID == projectID {
@@ -878,7 +946,13 @@ func (d *Dispatcher) executeExtractEntities(ctx context.Context, action Action) 
 		vfsRoot := d.vfs.Root()
 		env := make(map[string]string)
 
-		if err := d.goxManager.StartCell(cellID, projectID, vfsRoot, env); err != nil {
+		opts := cellorchestrator.CellOptions{
+			ProjectID:   projectID,
+			VFSRoot:     vfsRoot,
+			Environment: env,
+		}
+
+		if err := d.cellManager.StartCell(cellID, opts); err != nil {
 			return Result{
 				Action:  action,
 				Success: false,
@@ -907,7 +981,7 @@ func (d *Dispatcher) executeExtractEntities(ctx context.Context, action Action) 
 		timeout = time.Duration(timeoutParam) * time.Second
 	}
 
-	event, err := d.goxManager.PublishAndWait(
+	event, err := d.cellManager.PublishAndWait(
 		"text:for-ner",
 		"entities:results",
 		nerRequest,
@@ -931,11 +1005,11 @@ func (d *Dispatcher) executeExtractEntities(ctx context.Context, action Action) 
 
 // executeAnonymizeText anonymizes text by replacing entities with pseudonyms
 func (d *Dispatcher) executeAnonymizeText(ctx context.Context, action Action) Result {
-	if d.goxManager == nil {
+	if d.cellManager == nil {
 		return Result{
 			Action:  action,
 			Success: false,
-			Message: "Gox is not available. Anonymization requires --enable-gox flag.",
+			Message: "Cellorg is not available. Anonymization requires --enable-cellorg flag.",
 		}
 	}
 
@@ -955,7 +1029,7 @@ func (d *Dispatcher) executeAnonymizeText(ctx context.Context, action Action) Re
 
 	// Ensure anonymization pipeline cell is started
 	cellID := "privacy:anonymization-pipeline"
-	cells := d.goxManager.ListCells()
+	cells := d.cellManager.ListCells()
 	cellRunning := false
 	for _, cell := range cells {
 		if cell.CellID == cellID && cell.ProjectID == projectID {
@@ -969,7 +1043,13 @@ func (d *Dispatcher) executeAnonymizeText(ctx context.Context, action Action) Re
 		vfsRoot := d.vfs.Root()
 		env := make(map[string]string)
 
-		if err := d.goxManager.StartCell(cellID, projectID, vfsRoot, env); err != nil {
+		opts := cellorchestrator.CellOptions{
+			ProjectID:   projectID,
+			VFSRoot:     vfsRoot,
+			Environment: env,
+		}
+
+		if err := d.cellManager.StartCell(cellID, opts); err != nil {
 			return Result{
 				Action:  action,
 				Success: false,
@@ -992,7 +1072,7 @@ func (d *Dispatcher) executeAnonymizeText(ctx context.Context, action Action) Re
 		timeout = time.Duration(timeoutParam) * time.Second
 	}
 
-	nerEvent, err := d.goxManager.PublishAndWait(
+	nerEvent, err := d.cellManager.PublishAndWait(
 		"text:for-analysis",
 		"entities:detected",
 		nerRequest,
@@ -1023,7 +1103,7 @@ func (d *Dispatcher) executeAnonymizeText(ctx context.Context, action Action) Re
 		"project_id": projectID,
 	}
 
-	anonEvent, err := d.goxManager.PublishAndWait(
+	anonEvent, err := d.cellManager.PublishAndWait(
 		"entities:detected",
 		"text:anonymized",
 		anonRequest,
@@ -1047,11 +1127,11 @@ func (d *Dispatcher) executeAnonymizeText(ctx context.Context, action Action) Re
 
 // executeDeanonymizeText restores original text from anonymized version
 func (d *Dispatcher) executeDeanonymizeText(ctx context.Context, action Action) Result {
-	if d.goxManager == nil {
+	if d.cellManager == nil {
 		return Result{
 			Action:  action,
 			Success: false,
-			Message: "Gox is not available. Deanonymization requires --enable-gox flag.",
+			Message: "Cellorg is not available. Deanonymization requires --enable-cellorg flag.",
 		}
 	}
 

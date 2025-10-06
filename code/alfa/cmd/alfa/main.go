@@ -24,22 +24,24 @@ import (
 
 func main() {
 	var (
-		workbench     = flag.String("workbench", "workbench", "Workbench directory")
-		configFile    = flag.String("config", "", "Config file path (default: config/ai-config.json)")
-		mode          = flag.String("mode", "confirm", "Execution mode: confirm or allow-all")
-		provider      = flag.String("provider", "", "AI provider override (anthropic or openai)")
-		iterations    = flag.Int("max-iterations", 10, "Maximum AI iterations per request")
-		enableVoice   = flag.Bool("voice", false, "Enable voice input/output (requires OPENAI_API_KEY and sox)")
-		headless      = flag.Bool("headless", false, "Headless mode: enables voice + allow-all (autonomous voice agent)")
-		useSandbox    = flag.Bool("sandbox", false, "Use Docker sandbox for command execution (requires Docker)")
-		sandboxImage  = flag.String("sandbox-image", "golang:1.24-alpine", "Docker image for sandbox")
-		projectName   = flag.String("project", "", "Project name (creates if doesn't exist)")
-		listProjects  = flag.Bool("list-projects", false, "List all projects and exit")
-		createProject = flag.String("create-project", "", "Create a new project and exit")
-		deleteProject = flag.String("delete-project", "", "Delete a project (keeps backup) and exit")
+		workbench      = flag.String("workbench", "workbench", "Workbench directory")
+		configFile     = flag.String("config", "", "Config file path (default: config/ai-config.json)")
+		mode           = flag.String("mode", "confirm", "Execution mode: confirm or allow-all")
+		provider       = flag.String("provider", "", "AI provider override (anthropic or openai)")
+		iterations     = flag.Int("max-iterations", 10, "Maximum AI iterations per request")
+		enableVoice    = flag.Bool("voice", false, "Enable voice input/output (requires OPENAI_API_KEY and sox)")
+		headless       = flag.Bool("headless", false, "Headless mode: enables voice + allow-all (autonomous voice agent)")
+		useSandbox     = flag.Bool("sandbox", false, "Use Docker sandbox for command execution (requires Docker)")
+		sandboxImage   = flag.String("sandbox-image", "golang:1.24-alpine", "Docker image for sandbox")
+		projectName    = flag.String("project", "", "Project name (creates if doesn't exist)")
+		listProjects   = flag.Bool("list-projects", false, "List all projects and exit")
+		createProject  = flag.String("create-project", "", "Create a new project and exit")
+		deleteProject  = flag.String("delete-project", "", "Delete a project (keeps backup) and exit")
 		restoreProject = flag.String("restore-project", "", "Restore a deleted project and exit")
-		enableCellorg = flag.Bool("enable-cellorg", false, "Enable cellorg advanced features (cells, RAG, etc.)")
-		cellorgConfig = flag.String("cellorg-config", "config", "Path to cellorg configuration directory")
+		enableCellorg  = flag.Bool("enable-cellorg", false, "Enable cellorg advanced features (cells, RAG, etc.)")
+		cellorgConfig  = flag.String("cellorg-config", "config", "Path to cellorg configuration directory")
+		captureOutput  = flag.Bool("capture-output", true, "Capture command output to show AI (default: true)")
+		maxOutputKB    = flag.Int("max-output", 10, "Maximum output size in KB to show AI (default: 10)")
 	)
 
 	flag.Parse()
@@ -241,6 +243,7 @@ func main() {
 	contextMgr.SetActiveProject(selectedProject)
 	toolDispatcher := tools.NewDispatcherWithSandbox(projectVFS, sb, *useSandbox)
 	toolDispatcher.SetProjectManager(projectMgr)
+	toolDispatcher.SetOutputCapture(*captureOutput, *maxOutputKB*1024) // Convert KB to bytes
 	vcrInstance := vcr.NewVcr("assistant", projectVFS.Root())
 
 	// Initialize Cellorg if enabled
