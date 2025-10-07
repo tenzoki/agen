@@ -18,10 +18,12 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"log"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"sync"
 	"syscall"
 	"time"
@@ -36,48 +38,125 @@ import (
 //
 // Configuration Loading Strategy:
 // 1. Command line argument: Uses specified config file path
-// 2. Default file: Attempts to load gox.yaml from config directory
+// 2. Default file: Attempts to load cellorg.yaml from config directory
 // 3. Hardcoded defaults: Falls back to built-in configuration
 //
 // Called by: Operating system process execution
 // Calls: config.Load(), getDefaultConfig(), service initialization functions
 func main() {
+	// Parse command line flags
+	configFile := flag.String("config", "", "Path to configuration file (default: config/cellorg.yaml)")
+	dryRun := flag.Bool("dry-run", false, "Show configuration and paths without starting services")
+	flag.Parse()
+
+	// Get current working directory for logging
+	cwd, err := os.Getwd()
+	if err != nil {
+		log.Fatalf("Failed to get current directory: %v", err)
+	}
+
+	// Log startup information
+	log.Printf("═══════════════════════════════════════════════════════")
+	log.Printf("Cellorg Orchestrator Starting")
+	log.Printf("═══════════════════════════════════════════════════════")
+	log.Printf("Current directory: %s", cwd)
+
 	var cfg *config.Config
 	var configSource string
+	var configPath string
 
 	// Determine config source using priority hierarchy
-	if len(os.Args) >= 2 {
+	if *configFile != "" {
 		// Use provided config file path from command line
-		configFile := os.Args[1]
-		loadedCfg, err := config.Load(configFile)
+		configPath = *configFile
+
+		// Convert to absolute path for logging
+		absConfigPath, err := filepath.Abs(configPath)
 		if err != nil {
-			log.Fatalf("Failed to load config from %s: %v", configFile, err)
+			log.Printf("Warning: Could not resolve absolute path for %s: %v", configPath, err)
+			absConfigPath = configPath
+		}
+		log.Printf("Config file specified: %s", configPath)
+		log.Printf("Absolute config path: %s", absConfigPath)
+
+		loadedCfg, err := config.Load(configPath)
+		if err != nil {
+			log.Fatalf("Failed to load config from %s: %v", configPath, err)
 		}
 		cfg = loadedCfg
-		configSource = fmt.Sprintf("config file: %s", configFile)
+		configSource = fmt.Sprintf("config file: %s", configPath)
 	} else {
-		// Try to load gox.yaml from config directory as default
-		if _, err := os.Stat("config/gox.yaml"); err == nil {
-			loadedCfg, err := config.Load("config/gox.yaml")
+		// Try to load cellorg.yaml from config directory as default
+		configPath = "config/cellorg.yaml"
+		absConfigPath, _ := filepath.Abs(configPath)
+
+		log.Printf("No config specified, trying default: %s", configPath)
+		log.Printf("Absolute path: %s", absConfigPath)
+
+		if _, err := os.Stat(configPath); err == nil {
+			loadedCfg, err := config.Load(configPath)
 			if err != nil {
-				log.Printf("Warning: config/gox.yaml exists but failed to load: %v", err)
+				log.Printf("Warning: %s exists but failed to load: %v", configPath, err)
 				log.Printf("Using hardcoded defaults instead")
 				cfg = getDefaultConfig()
-				configSource = "hardcoded defaults (config/gox.yaml failed to parse)"
+				configSource = "hardcoded defaults (config/cellorg.yaml failed to parse)"
 			} else {
 				cfg = loadedCfg
-				configSource = "config/gox.yaml (default)"
+				configSource = fmt.Sprintf("%s (default)", configPath)
 			}
 		} else {
 			// Use hardcoded defaults when no config file is available
-			log.Printf("No config file specified and config/gox.yaml not found")
+			log.Printf("Default config not found: %s", absConfigPath)
 			cfg = getDefaultConfig()
 			configSource = "hardcoded defaults"
 		}
 	}
 
-	// Inform user about configuration source and debug status
-	log.Printf("Starting Gox using %s", configSource)
+	// Log configuration details
+	log.Printf("Configuration loaded from: %s", configSource)
+
+	// Log base directories for config file resolution
+	if len(cfg.BaseDir) > 0 {
+		log.Printf("Base directories for relative paths:")
+		for _, baseDir := range cfg.BaseDir {
+			absBaseDir, _ := filepath.Abs(baseDir)
+			log.Printf("  - %s (absolute: %s)", baseDir, absBaseDir)
+		}
+	}
+
+	// Log pool and cells file locations
+	if len(cfg.Pool) > 0 {
+		log.Printf("Pool configuration files:")
+		for _, poolFile := range cfg.Pool {
+			resolvedPath := poolFile
+			if len(cfg.BaseDir) > 0 && poolFile[0] != '/' {
+				resolvedPath = filepath.Join(cfg.BaseDir[0], poolFile)
+			}
+			absPoolPath, _ := filepath.Abs(resolvedPath)
+			log.Printf("  - %s → %s", poolFile, absPoolPath)
+		}
+	}
+
+	if len(cfg.Cells) > 0 {
+		log.Printf("Cells configuration files:")
+		for _, cellsFile := range cfg.Cells {
+			resolvedPath := cellsFile
+			if len(cfg.BaseDir) > 0 && cellsFile[0] != '/' {
+				resolvedPath = filepath.Join(cfg.BaseDir[0], cellsFile)
+			}
+			absCellsPath, _ := filepath.Abs(resolvedPath)
+			log.Printf("  - %s → %s", cellsFile, absCellsPath)
+		}
+	}
+
+	if *dryRun {
+		log.Printf("═══════════════════════════════════════════════════════")
+		log.Printf("DRY RUN MODE - Configuration verified, exiting")
+		log.Printf("═══════════════════════════════════════════════════════")
+		return
+	}
+
+	log.Printf("═══════════════════════════════════════════════════════")
 
 	if cfg.Debug {
 		log.Printf("Debug enabled for app: %s", cfg.AppName)
@@ -124,7 +203,7 @@ func main() {
 		log.Printf("Failed to register broker with support: %v", err)
 	}
 
-	log.Printf("Gox v3 started: %s", cfg.AppName)
+	log.Printf("Cellorg started: %s", cfg.AppName)
 	log.Printf("Support service on: %s", cfg.Support.Port)
 	log.Printf("Broker service on: %s (%s/%s)", cfg.Broker.Port, cfg.Broker.Protocol, cfg.Broker.Codec)
 
@@ -165,6 +244,14 @@ func main() {
 		log.Printf("Warning: failed to load cells configuration: %v", err)
 	} else if len(cellsConfig.Cells) > 0 {
 		log.Printf("Loaded %d cells from configuration", len(cellsConfig.Cells))
+
+		// Validate configuration consistency
+		if poolConfig != nil {
+			if err := config.ValidateConfiguration(poolConfig, cellsConfig); err != nil {
+				log.Fatalf("Configuration validation failed:\n%v", err)
+			}
+			log.Printf("Configuration validation passed")
+		}
 
 		// Deploy agents from cells, respecting dependencies and orchestration settings
 		totalAgents := 0
@@ -216,12 +303,12 @@ func main() {
 	}
 }
 
-// getDefaultConfig returns hardcoded default configuration for GOX framework.
+// getDefaultConfig returns hardcoded default configuration for Cellorg framework.
 //
 // This fallback configuration is used when:
 // - No command line config file is specified
-// - gox.yaml is not found in current directory
-// - gox.yaml exists but contains parsing errors
+// - cellorg.yaml is not found in current directory
+// - cellorg.yaml exists but contains parsing errors
 //
 // Default Configuration Includes:
 // - Support service on port 9000 (agent registry and health monitoring)
@@ -234,7 +321,7 @@ func main() {
 // Calls: None (pure configuration data)
 func getDefaultConfig() *config.Config {
 	return &config.Config{
-		AppName: "gox-default",
+		AppName: "cellorg-default",
 		Debug:   true,
 		Support: config.SupportConfig{
 			Port:  ":9000", // Agent registry and health monitoring service

@@ -13,11 +13,10 @@ workbench/config/
 ├── README.md                 # This file
 ├── agents/                   # Agent-specific configs (optional)
 ├── cells/                    # Cell definitions (organized by purpose)
-│   ├── pipelines/           # Sequential processing workflows (7 cells)
+│   ├── pipelines/           # Sequential processing workflows (8 cells)
 │   ├── services/            # Backend/supporting services (6 cells)
 │   ├── analysis/            # Content analysis workflows (6 cells)
-│   ├── synthesis/           # Output generation (5 cells)
-│   └── anonymization.yaml   # Special-purpose cell
+│   └── synthesis/           # Output generation (5 cells)
 └── archive/                  # Deprecated/obsolete configs
 ```
 
@@ -77,6 +76,7 @@ Cells are organized by purpose in `cells/`:
 - `text-extraction-pipeline.yaml` - Text extraction from various formats
 - `file-chunking-pipeline.yaml` - Split files into processable chunks
 - `file-transform-pipeline.yaml` - Transform file formats/structure
+- `anonymization-pipeline.yaml` - PII detection and pseudonymization with NER
 
 **Usage:**
 ```bash
@@ -125,14 +125,6 @@ bin/orchestrator -config=cells/analysis/content-analysis.yaml
 **Usage:**
 ```bash
 bin/orchestrator -config=cells/synthesis/reporting.yaml
-```
-
-### cells/anonymization.yaml
-**Special-purpose cell** - PII/privacy anonymization pipeline using NER
-
-**Usage:**
-```bash
-bin/orchestrator -config=cells/anonymization.yaml
 ```
 
 ## Agent Configuration (Optional)
@@ -238,7 +230,6 @@ Changes are tracked in separate git repositories:
 - **Need backend services?** → `cells/services/`
 - **Need to analyze content?** → `cells/analysis/`
 - **Need to generate output?** → `cells/synthesis/`
-- **Need PII anonymization?** → `cells/anonymization.yaml`
 
 ### Full Documentation
 - Cell definitions: [reflect/cells/](../../reflect/cells/)

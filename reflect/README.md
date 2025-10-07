@@ -20,9 +20,10 @@ cat reflect/architecture/omni.md      # Unified storage backend
 
 Browse cell configurations:
 ```bash
-ls reflect/cells/                     # 30+ cell configurations
-cat reflect/cells/anonymization-pipeline.md
-cat reflect/cells/document-processing-pipeline.md
+ls reflect/cells/                     # Organized by category
+cat reflect/cells/README.md           # Cell documentation index
+cat reflect/cells/pipelines/anonymization-pipeline.md
+cat reflect/cells/services/rag.md
 ```
 
 Review historical decisions:
@@ -38,8 +39,12 @@ No dependencies - documentation only.
 
 Directory structure:
 - `architecture/` - Core architecture specs (start here)
-- `cells/` - Cell configuration documentation
-- `agents/` - Agent-specific documentation
+- `cells/` - Cell configuration documentation (organized by purpose)
+  - `pipelines/` - Processing workflows (8 cells)
+  - `services/` - Backend services (6 cells)
+  - `analysis/` - Content analysis (6 cells)
+  - `synthesis/` - Output generation (5 cells)
+  - `guides/` - Tutorials and setup (6 docs)
 - `archive/` - Historical decisions and evolution
 
 ## Tests
@@ -58,8 +63,9 @@ grep -r "\[.*\](.*\.md)" reflect/architecture/
 Navigation workflow:
 1. Start: `reflect/architecture/README.md` - System overview
 2. Module: `reflect/architecture/<module>.md` - Specific component
-3. Cell examples: `reflect/cells/*.md` - Configuration patterns
-4. Archive: `reflect/archive/*.md` - Historical context
+3. Cell index: `reflect/cells/README.md` - Cell categories and index
+4. Cell examples: `reflect/cells/<category>/*.md` - Configuration patterns
+5. Archive: `reflect/archive/*.md` - Historical context
 
 Cross-references to implementation:
 - Architecture docs → `/code/<module>/` implementation

@@ -34,6 +34,7 @@ LDFLAGS := -ldflags "-X main.Version=$(VERSION) -X main.BuildTime=$(BUILD_TIME) 
 BUILD_FLAGS := -v
 
 # CGO Configuration (for agents requiring native libraries like ner_agent)
+export MACOSX_DEPLOYMENT_TARGET := 15.5
 export CGO_LDFLAGS := -L$(PROJECT_ROOT)/drivers/tokenizers -ltokenizers -ldl -lm -lstdc++
 
 # Module paths
@@ -67,7 +68,7 @@ RESET := \033[0m
 
 help: ## Show this help message with descriptions
 	@echo "$(CYAN)╔═══════════════════════════════════════════════════════════╗$(RESET)"
-	@echo "$(CYAN)║           $(MAGENTA)AGEN - Unified Build System$(CYAN)                  ║$(RESET)"
+	@echo "$(CYAN)║           $(MAGENTA)AGEN - Unified Build System$(CYAN)                     ║$(RESET)"
 	@echo "$(CYAN)╚═══════════════════════════════════════════════════════════╝$(RESET)"
 	@echo ""
 	@echo "$(YELLOW)Project:$(RESET)  $(PROJECT_NAME)"
@@ -89,7 +90,7 @@ help: ## Show this help message with descriptions
 
 list: ## List all available make targets grouped by category
 	@echo "$(CYAN)╔═══════════════════════════════════════════════════════════╗$(RESET)"
-	@echo "$(CYAN)║              $(MAGENTA)AGEN Build Targets$(CYAN)                        ║$(RESET)"
+	@echo "$(CYAN)║              $(MAGENTA)AGEN Build Targets$(CYAN)                           ║$(RESET)"
 	@echo "$(CYAN)╚═══════════════════════════════════════════════════════════╝$(RESET)"
 	@echo ""
 	@echo "$(MAGENTA)▶ Build Targets:$(RESET)"
@@ -233,7 +234,23 @@ lint: ## Run linters (requires golangci-lint)
 	@cd $(CODE_DIR) && golangci-lint run ./...
 	@echo "$(GREEN)✅ Linting complete$(RESET)"
 
-check: format vet ## Run format and vet
+check-atomic-deps: ## Verify atomic module has no external dependencies (stdlib only)
+	@echo "$(BLUE)🔍 Checking atomic module dependencies...$(RESET)"
+	@cd $(ATOMIC_DIR) && \
+		deps=$$($(GO) list -m all | grep -v "^github.com/tenzoki/agen/atomic$$" || true) && \
+		if [ -n "$$deps" ]; then \
+			echo "$(RED)❌ CRITICAL: atomic module has external dependencies!$(RESET)" && \
+			echo "$(RED)   Atomic MUST remain stdlib-only. Found:$(RESET)" && \
+			echo "$$deps" && \
+			echo "" && \
+			echo "$(YELLOW)   This violates AGEN architecture principles.$(RESET)" && \
+			echo "$(YELLOW)   See: guidelines/references/architecture.md$(RESET)" && \
+			exit 1; \
+		else \
+			echo "$(GREEN)  ✅ atomic has zero external dependencies$(RESET)"; \
+		fi
+
+check: format vet check-atomic-deps ## Run format, vet, and dependency checks
 
 # ==============================================================================
 # Development Targets
@@ -268,6 +285,15 @@ clean-test: ## Clean test artifacts and reports
 	@find $(CODE_DIR) -name "*.test" -delete
 	@find $(CODE_DIR) -name "*.prof" -delete
 	@echo "$(GREEN)✅ Test artifacts cleaned$(RESET)"
+
+clean-reports: ## Clean all test reports in reflect/test-reports/
+	@echo "$(BLUE)🧹 Cleaning test reports...$(RESET)"
+	@rm -f $(REPORT_DIR)/*.md
+	@rm -f $(REPORT_DIR)/*.txt
+	@rm -f $(REPORT_DIR)/*.json
+	@rm -f $(REPORT_DIR)/*.log
+	@rm -rf $(REPORT_DIR)/coverage/
+	@echo "$(GREEN)✅ Test reports cleaned$(RESET)"
 
 clean-all: clean clean-test ## Clean everything (build + test artifacts)
 	@echo "$(BLUE)🧹 Deep cleaning...$(RESET)"

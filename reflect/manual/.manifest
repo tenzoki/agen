@@ -1,0 +1,220 @@
+{
+  "Timestamp": "2025-10-07T07:41:22.287284+02:00",
+  "Sources": [
+    {
+      "Path": "/Users/kai/Dropbox/qboot/projects/E10-agen/agen/code/agents/adapter/README.md",
+      "ModTime": "2025-10-04T21:06:14.35341013+02:00"
+    },
+    {
+      "Path": "/Users/kai/Dropbox/qboot/projects/E10-agen/agen/code/agents/anonymization_store/README.md",
+      "ModTime": "2025-10-04T21:06:42.455581733+02:00"
+    },
+    {
+      "Path": "/Users/kai/Dropbox/qboot/projects/E10-agen/agen/code/agents/anonymizer/README.md",
+      "ModTime": "2025-10-04T21:06:42.49460101+02:00"
+    },
+    {
+      "Path": "/Users/kai/Dropbox/qboot/projects/E10-agen/agen/code/agents/binary_analyzer/README.md",
+      "ModTime": "2025-10-04T21:06:42.530733099+02:00"
+    },
+    {
+      "Path": "/Users/kai/Dropbox/qboot/projects/E10-agen/agen/code/agents/chunk_writer/README.md",
+      "ModTime": "2025-10-04T21:07:19.460308946+02:00"
+    },
+    {
+      "Path": "/Users/kai/Dropbox/qboot/projects/E10-agen/agen/code/agents/context_enricher/README.md",
+      "ModTime": "2025-10-04T21:07:19.50089213+02:00"
+    },
+    {
+      "Path": "/Users/kai/Dropbox/qboot/projects/E10-agen/agen/code/agents/dataset_builder/README.md",
+      "ModTime": "2025-10-04T21:07:19.539277745+02:00"
+    },
+    {
+      "Path": "/Users/kai/Dropbox/qboot/projects/E10-agen/agen/code/agents/embedding_agent/README.md",
+      "ModTime": "2025-10-04T21:07:19.575518208+02:00"
+    },
+    {
+      "Path": "/Users/kai/Dropbox/qboot/projects/E10-agen/agen/code/agents/file_ingester/README.md",
+      "ModTime": "2025-10-04T21:08:59.170016277+02:00"
+    },
+    {
+      "Path": "/Users/kai/Dropbox/qboot/projects/E10-agen/agen/code/agents/file_writer/README.md",
+      "ModTime": "2025-10-04T21:08:59.209539343+02:00"
+    },
+    {
+      "Path": "/Users/kai/Dropbox/qboot/projects/E10-agen/agen/code/agents/godast_storage/README.md",
+      "ModTime": "2025-10-04T21:08:59.24961403+02:00"
+    },
+    {
+      "Path": "/Users/kai/Dropbox/qboot/projects/E10-agen/agen/code/agents/image_analyzer/README.md",
+      "ModTime": "2025-10-04T21:08:59.286130366+02:00"
+    },
+    {
+      "Path": "/Users/kai/Dropbox/qboot/projects/E10-agen/agen/code/agents/json_analyzer/README.md",
+      "ModTime": "2025-10-04T21:08:59.32568564+02:00"
+    },
+    {
+      "Path": "/Users/kai/Dropbox/qboot/projects/E10-agen/agen/code/agents/metadata_collector/README.md",
+      "ModTime": "2025-10-04T21:08:59.360016616+02:00"
+    },
+    {
+      "Path": "/Users/kai/Dropbox/qboot/projects/E10-agen/agen/code/agents/ner_agent/README.md",
+      "ModTime": "2025-10-04T15:19:57.11468417+02:00"
+    },
+    {
+      "Path": "/Users/kai/Dropbox/qboot/projects/E10-agen/agen/code/agents/ocr_http_stub/README.md",
+      "ModTime": "2025-10-04T21:08:59.400534217+02:00"
+    },
+    {
+      "Path": "/Users/kai/Dropbox/qboot/projects/E10-agen/agen/code/agents/rag_agent/README.md",
+      "ModTime": "2025-10-04T21:08:59.436766555+02:00"
+    },
+    {
+      "Path": "/Users/kai/Dropbox/qboot/projects/E10-agen/agen/code/agents/report_generator/README.md",
+      "ModTime": "2025-10-04T21:08:59.467212057+02:00"
+    },
+    {
+      "Path": "/Users/kai/Dropbox/qboot/projects/E10-agen/agen/code/agents/search_indexer/README.md",
+      "ModTime": "2025-10-04T21:08:59.498522054+02:00"
+    },
+    {
+      "Path": "/Users/kai/Dropbox/qboot/projects/E10-agen/agen/code/agents/strategy_selector/README.md",
+      "ModTime": "2025-10-04T21:08:59.528896348+02:00"
+    },
+    {
+      "Path": "/Users/kai/Dropbox/qboot/projects/E10-agen/agen/code/agents/summary_generator/README.md",
+      "ModTime": "2025-10-04T21:08:59.569591781+02:00"
+    },
+    {
+      "Path": "/Users/kai/Dropbox/qboot/projects/E10-agen/agen/code/agents/text_analyzer/README.md",
+      "ModTime": "2025-10-04T21:08:59.600531988+02:00"
+    },
+    {
+      "Path": "/Users/kai/Dropbox/qboot/projects/E10-agen/agen/code/agents/text_chunker/README.md",
+      "ModTime": "2025-10-04T21:08:59.63344714+02:00"
+    },
+    {
+      "Path": "/Users/kai/Dropbox/qboot/projects/E10-agen/agen/code/agents/text_extractor_native/README.md",
+      "ModTime": "2025-10-04T21:08:59.670347474+02:00"
+    },
+    {
+      "Path": "/Users/kai/Dropbox/qboot/projects/E10-agen/agen/code/agents/text_transformer/README.md",
+      "ModTime": "2025-10-04T21:08:59.706742853+02:00"
+    },
+    {
+      "Path": "/Users/kai/Dropbox/qboot/projects/E10-agen/agen/code/agents/vectorstore_agent/README.md",
+      "ModTime": "2025-10-04T21:08:59.738192265+02:00"
+    },
+    {
+      "Path": "/Users/kai/Dropbox/qboot/projects/E10-agen/agen/code/agents/xml_analyzer/README.md",
+      "ModTime": "2025-10-04T21:08:59.772277826+02:00"
+    },
+    {
+      "Path": "/Users/kai/Dropbox/qboot/projects/E10-agen/agen/reflect/cells/pipelines/anonymization-pipeline.md",
+      "ModTime": "2025-10-06T15:24:34.152224633+02:00"
+    },
+    {
+      "Path": "/Users/kai/Dropbox/qboot/projects/E10-agen/agen/reflect/cells/pipelines/document-processing-pipeline.md",
+      "ModTime": "2025-10-06T15:24:34.196952696+02:00"
+    },
+    {
+      "Path": "/Users/kai/Dropbox/qboot/projects/E10-agen/agen/reflect/cells/pipelines/fast-document-processing-pipeline.md",
+      "ModTime": "2025-10-06T15:24:34.217072212+02:00"
+    },
+    {
+      "Path": "/Users/kai/Dropbox/qboot/projects/E10-agen/agen/reflect/cells/pipelines/file-chunking-pipeline.md",
+      "ModTime": "2025-10-06T15:24:34.224140546+02:00"
+    },
+    {
+      "Path": "/Users/kai/Dropbox/qboot/projects/E10-agen/agen/reflect/cells/pipelines/file-transform-pipeline.md",
+      "ModTime": "2025-10-06T15:24:34.231106298+02:00"
+    },
+    {
+      "Path": "/Users/kai/Dropbox/qboot/projects/E10-agen/agen/reflect/cells/pipelines/intelligent-document-processing-pipeline.md",
+      "ModTime": "2025-10-06T15:24:34.26436237+02:00"
+    },
+    {
+      "Path": "/Users/kai/Dropbox/qboot/projects/E10-agen/agen/reflect/cells/pipelines/research-paper-processing-pipeline.md",
+      "ModTime": "2025-10-06T15:24:34.322965688+02:00"
+    },
+    {
+      "Path": "/Users/kai/Dropbox/qboot/projects/E10-agen/agen/reflect/cells/pipelines/text-extraction-pipeline.md",
+      "ModTime": "2025-10-06T15:24:34.373990928+02:00"
+    },
+    {
+      "Path": "/Users/kai/Dropbox/qboot/projects/E10-agen/agen/reflect/cells/services/native-text-extraction.md",
+      "ModTime": "2025-10-06T15:24:34.282437743+02:00"
+    },
+    {
+      "Path": "/Users/kai/Dropbox/qboot/projects/E10-agen/agen/reflect/cells/services/ocr-production.md",
+      "ModTime": "2025-10-06T15:24:34.257588157+02:00"
+    },
+    {
+      "Path": "/Users/kai/Dropbox/qboot/projects/E10-agen/agen/reflect/cells/services/ocr.md",
+      "ModTime": "2025-10-06T15:24:34.251235689+02:00"
+    },
+    {
+      "Path": "/Users/kai/Dropbox/qboot/projects/E10-agen/agen/reflect/cells/services/rag.md",
+      "ModTime": "2025-10-06T15:24:34.271175957+02:00"
+    },
+    {
+      "Path": "/Users/kai/Dropbox/qboot/projects/E10-agen/agen/reflect/cells/services/storage-service.md",
+      "ModTime": "2025-10-06T15:24:34.349839709+02:00"
+    },
+    {
+      "Path": "/Users/kai/Dropbox/qboot/projects/E10-agen/agen/reflect/cells/services/storage.md",
+      "ModTime": "2025-10-06T15:24:34.339946782+02:00"
+    },
+    {
+      "Path": "/Users/kai/Dropbox/qboot/projects/E10-agen/agen/reflect/cells/analysis/academic-analysis.md",
+      "ModTime": "2025-10-06T15:24:34.137179308+02:00"
+    },
+    {
+      "Path": "/Users/kai/Dropbox/qboot/projects/E10-agen/agen/reflect/cells/analysis/binary-media.md",
+      "ModTime": "2025-10-06T15:24:34.176030647+02:00"
+    },
+    {
+      "Path": "/Users/kai/Dropbox/qboot/projects/E10-agen/agen/reflect/cells/analysis/content-analysis.md",
+      "ModTime": "2025-10-06T15:24:34.183173606+02:00"
+    },
+    {
+      "Path": "/Users/kai/Dropbox/qboot/projects/E10-agen/agen/reflect/cells/analysis/fast-analysis.md",
+      "ModTime": "2025-10-06T15:24:34.210270041+02:00"
+    },
+    {
+      "Path": "/Users/kai/Dropbox/qboot/projects/E10-agen/agen/reflect/cells/analysis/structured-data.md",
+      "ModTime": "2025-10-06T15:24:34.35720279+02:00"
+    },
+    {
+      "Path": "/Users/kai/Dropbox/qboot/projects/E10-agen/agen/reflect/cells/analysis/text-deep.md",
+      "ModTime": "2025-10-06T15:24:34.365513068+02:00"
+    },
+    {
+      "Path": "/Users/kai/Dropbox/qboot/projects/E10-agen/agen/reflect/cells/synthesis/data-export.md",
+      "ModTime": "2025-10-06T15:24:34.190037943+02:00"
+    },
+    {
+      "Path": "/Users/kai/Dropbox/qboot/projects/E10-agen/agen/reflect/cells/synthesis/document-summary.md",
+      "ModTime": "2025-10-06T15:24:34.203620535+02:00"
+    },
+    {
+      "Path": "/Users/kai/Dropbox/qboot/projects/E10-agen/agen/reflect/cells/synthesis/full-analysis.md",
+      "ModTime": "2025-10-06T15:24:34.237745013+02:00"
+    },
+    {
+      "Path": "/Users/kai/Dropbox/qboot/projects/E10-agen/agen/reflect/cells/synthesis/reporting.md",
+      "ModTime": "2025-10-06T15:24:34.311933233+02:00"
+    },
+    {
+      "Path": "/Users/kai/Dropbox/qboot/projects/E10-agen/agen/reflect/cells/synthesis/search-ready.md",
+      "ModTime": "2025-10-06T15:24:34.33010148+02:00"
+    },
+    {
+      "Path": "/Users/kai/Dropbox/qboot/projects/E10-agen/agen/workbench/config/pool.yaml",
+      "ModTime": "2025-10-06T21:33:59.405697446+02:00"
+    }
+  ],
+  "AgentCount": 27,
+  "CellCount": 25,
+  "GeneratedBy": "alfa knowledge extractor"
+}

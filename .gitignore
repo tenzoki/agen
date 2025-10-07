@@ -1,6 +1,19 @@
 _collaboration/
 bin/
 
+# Projects are isolated with their own git repos (VCR isolation)
+workbench/projects/*/
+
+# Keep projects directory structure but not contents
+!workbench/projects/
+!workbench/projects/.gitkeep
+
+# Project backups (local recovery, not in framework repo)
+workbench/.git-remotes/
+
+# Workbench context files (user-specific)
+workbench/.alfa/
+
 # ML Models (large files, not checked in)
 trained/**/*.onnx
 trained/**/*.onnx_data

@@ -199,9 +199,9 @@ type Deployer interface {
 ```go
 // Agent interface
 type AgentRunner interface {
+    Init(base *BaseAgent) error  // Called at startup
     ProcessMessage(msg *client.BrokerMessage, base *BaseAgent) (*client.BrokerMessage, error)
-    OnStart(base *BaseAgent) error  // Optional lifecycle hook
-    OnStop(base *BaseAgent)          // Optional cleanup hook
+    Cleanup(base *BaseAgent)  // Called at shutdown
 }
 
 // Default implementation

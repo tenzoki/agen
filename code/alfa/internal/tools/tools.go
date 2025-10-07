@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	alfaconfig "github.com/tenzoki/agen/alfa/internal/config"
 	"github.com/tenzoki/agen/alfa/internal/project"
 	"github.com/tenzoki/agen/alfa/internal/sandbox"
 	"github.com/tenzoki/agen/atomic/vfs"
@@ -21,6 +22,8 @@ type Dispatcher struct {
 	sandbox        sandbox.Sandbox
 	projectManager *project.Manager
 	cellManager    *cellorchestrator.EmbeddedOrchestrator
+	config         *alfaconfig.AlfaConfig
+	configPath     string
 	timeout        time.Duration
 	useSandbox     bool
 	captureOutput  bool
@@ -77,6 +80,12 @@ func (d *Dispatcher) SetProjectManager(pm *project.Manager) {
 // SetCellManager sets the cell manager for cell operations
 func (d *Dispatcher) SetCellManager(cm *cellorchestrator.EmbeddedOrchestrator) {
 	d.cellManager = cm
+}
+
+// SetConfig sets the configuration and config path for runtime config management
+func (d *Dispatcher) SetConfig(cfg *alfaconfig.AlfaConfig, configPath string) {
+	d.config = cfg
+	d.configPath = configPath
 }
 
 // GetSandbox returns the sandbox instance
@@ -141,6 +150,12 @@ func (d *Dispatcher) Execute(ctx context.Context, action Action) Result {
 		return d.executeAnonymizeText(ctx, action)
 	case "deanonymize_text":
 		return d.executeDeanonymizeText(ctx, action)
+	case "config_get":
+		return d.executeConfigGet(action)
+	case "config_set":
+		return d.executeConfigSet(action)
+	case "config_list":
+		return d.executeConfigList(action)
 	default:
 		return Result{
 			Action:  action,
@@ -1208,5 +1223,188 @@ func (d *Dispatcher) executeDeanonymizeText(ctx context.Context, action Action) 
 			"restored_text":   restoredText,
 			"replacements":    len(reversedMappings),
 		},
+	}
+}
+
+// executeConfigGet retrieves a configuration setting
+func (d *Dispatcher) executeConfigGet(action Action) Result {
+	if d.config == nil {
+		return Result{
+			Action:  action,
+			Success: false,
+			Message: "Configuration not available",
+		}
+	}
+
+	key, ok := action.Params["key"].(string)
+	if !ok || key == "" {
+		return Result{
+			Action:  action,
+			Success: false,
+			Message: "missing 'key' parameter",
+		}
+	}
+
+	value, err := d.config.GetSetting(key)
+	if err != nil {
+		return Result{
+			Action:  action,
+			Success: false,
+			Message: fmt.Sprintf("failed to get setting: %v", err),
+		}
+	}
+
+	return Result{
+		Action:  action,
+		Success: true,
+		Message: fmt.Sprintf("Retrieved setting: %s = %s", key, value),
+		Output: map[string]interface{}{
+			"key":   key,
+			"value": value,
+		},
+	}
+}
+
+// executeConfigSet updates a configuration setting
+func (d *Dispatcher) executeConfigSet(action Action) Result {
+	if d.config == nil {
+		return Result{
+			Action:  action,
+			Success: false,
+			Message: "Configuration not available",
+		}
+	}
+
+	key, ok := action.Params["key"].(string)
+	if !ok || key == "" {
+		return Result{
+			Action:  action,
+			Success: false,
+			Message: "missing 'key' parameter",
+		}
+	}
+
+	value, ok := action.Params["value"].(string)
+	if !ok {
+		return Result{
+			Action:  action,
+			Success: false,
+			Message: "missing 'value' parameter",
+		}
+	}
+
+	// Update the setting
+	if err := d.config.UpdateSetting(key, value); err != nil {
+		return Result{
+			Action:  action,
+			Success: false,
+			Message: fmt.Sprintf("failed to update setting: %v", err),
+		}
+	}
+
+	// Save to disk
+	if d.configPath != "" {
+		if err := alfaconfig.SaveConfig(d.configPath, d.config); err != nil {
+			return Result{
+				Action:  action,
+				Success: false,
+				Message: fmt.Sprintf("setting updated but failed to save: %v", err),
+			}
+		}
+	}
+
+	// Apply immediate changes based on the setting
+	message := fmt.Sprintf("Updated setting: %s = %s (saved to alfa.yaml)", key, value)
+	needsRestart := false
+
+	// Check if setting requires restart
+	restartSettings := []string{
+		"ai.provider",
+		"ai.config_file",
+		"workbench.path",
+		"sandbox.enabled",
+		"sandbox.image",
+		"cellorg.enabled",
+		"cellorg.config_path",
+	}
+
+	for _, rs := range restartSettings {
+		if key == rs {
+			needsRestart = true
+			message += " (restart alfa to apply changes)"
+			break
+		}
+	}
+
+	// Settings that can be applied immediately
+	switch key {
+	case "execution.auto_confirm":
+		message += " (will apply on next operation)"
+	case "execution.max_iterations":
+		message += " (will apply on next request)"
+	case "output.capture_enabled", "output.max_size_kb":
+		// Update dispatcher settings
+		d.captureOutput = d.config.Output.CaptureEnabled
+		d.maxOutputBytes = d.config.Output.MaxSizeKB * 1024
+		message += " (applied immediately)"
+	}
+
+	return Result{
+		Action:  action,
+		Success: true,
+		Message: message,
+		Output: map[string]interface{}{
+			"key":           key,
+			"value":         value,
+			"needs_restart": needsRestart,
+		},
+	}
+}
+
+// executeConfigList lists all configuration settings
+func (d *Dispatcher) executeConfigList(action Action) Result {
+	if d.config == nil {
+		return Result{
+			Action:  action,
+			Success: false,
+			Message: "Configuration not available",
+		}
+	}
+
+	settings := d.config.ListSettings()
+
+	// Format settings for display
+	var output strings.Builder
+	output.WriteString("Current configuration settings:\n\n")
+
+	// Group by category
+	categories := map[string][]string{
+		"Workbench":      {"workbench.path", "workbench.project"},
+		"AI Provider":    {"ai.provider", "ai.config_file"},
+		"Voice":          {"voice.enabled", "voice.headless"},
+		"Execution":      {"execution.auto_confirm", "execution.max_iterations"},
+		"Sandbox":        {"sandbox.enabled", "sandbox.image"},
+		"Cellorg":        {"cellorg.enabled", "cellorg.config_path"},
+		"Output":         {"output.capture_enabled", "output.max_size_kb"},
+		"Self-Modify":    {"self_modify.allowed"},
+	}
+
+	for category, keys := range categories {
+		output.WriteString(fmt.Sprintf("[%s]\n", category))
+		for _, key := range keys {
+			if value, ok := settings[key]; ok {
+				output.WriteString(fmt.Sprintf("  %-28s = %s\n", key, value))
+			}
+		}
+		output.WriteString("\n")
+	}
+
+	output.WriteString(fmt.Sprintf("Config file: %s\n", d.configPath))
+
+	return Result{
+		Action:  action,
+		Success: true,
+		Message: "Configuration settings retrieved",
+		Output:  output.String(),
 	}
 }

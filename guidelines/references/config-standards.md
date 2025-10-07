@@ -83,10 +83,11 @@ workbench/
 │   ├── pool.yaml             # Agent type definitions
 │   ├── ai-config.json        # AI provider settings (alfa)
 │   ├── speech-config.json    # Speech settings (alfa)
-│   ├── cells/                # Cell definitions (modular)
-│   │   ├── anonymization.yaml
-│   │   ├── rag.yaml
-│   │   └── *.yaml
+│   ├── cells/                # Cell definitions (organized by purpose)
+│   │   ├── pipelines/        # Processing workflows (8 cells)
+│   │   ├── services/         # Backend services (6 cells)
+│   │   ├── analysis/         # Content analysis (6 cells)
+│   │   └── synthesis/        # Output generation (5 cells)
 │   └── agents/               # Agent configs (OPTIONAL)
 │       ├── ner_agent.yaml
 │       └── *.yaml
@@ -127,7 +128,7 @@ bin/orchestrator
 bin/orchestrator -config=workbench/config/cellorg.yaml
 
 # Specific cell
-bin/orchestrator -config=workbench/config/cells/anonymization.yaml
+bin/orchestrator -config=workbench/config/cells/pipelines/anonymization-pipeline.yaml
 
 # Dry run (validate)
 bin/orchestrator -config=workbench/config/cellorg.yaml -dry-run

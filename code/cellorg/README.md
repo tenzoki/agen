@@ -55,7 +55,7 @@ go build -o ../../bin/orchestrator ./cmd/orchestrator
 Configuration files (in workbench/config/):
 - `pool.yaml` - Agent type definitions
 - `cells.yaml` - Agent instance deployment
-- `gox.yaml` - Infrastructure settings
+- `cellorg.yaml` - Infrastructure settings
 
 ## Tests
 
@@ -89,7 +89,7 @@ Run demo:
 ```
 
 Multi-agent workbench demos:
-- `/workbench/demos/gox_demo` - Full pipeline
-- `/workbench/demos/gox_anonymization` - Anonymization
+- `/workbench/demos/cell_demo` - Full pipeline
+- `/workbench/demos/anonymization_demo` - Anonymization
 
 See [/reflect/architecture/cellorg.md](../../reflect/architecture/cellorg.md) for cell execution flow, communication patterns, and public APIs.

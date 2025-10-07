@@ -15,11 +15,13 @@ Provide reusable processing units that implement business logic only. Framework 
 
 ### Core Principle
 
-**Agents implement one function: ProcessMessage()** - everything else handled by framework.
+**Agents implement three methods** - business logic only, infrastructure handled by framework.
 
 ```go
-type Agent interface {
+type AgentRunner interface {
+    Init(base *agent.BaseAgent) error
     ProcessMessage(msg *client.BrokerMessage, base *agent.BaseAgent) (*client.BrokerMessage, error)
+    Cleanup(base *agent.BaseAgent)
 }
 ```
 
@@ -31,9 +33,9 @@ type Agent interface {
 - Error recovery
 
 **Agent provides:**
-- Business logic transformation
-- Input → Output processing
-- Optional lifecycle hooks
+- Initialization (Init)
+- Business logic transformation (ProcessMessage)
+- Cleanup (Cleanup)
 
 ### Agent vs Agent Type vs Agent Instance
 
@@ -76,12 +78,14 @@ agents:
 
 ```go
 type AgentRunner interface {
-    // Required: Process single message
+    // Called once at startup - initialize resources, connect to storage
+    Init(base *BaseAgent) error
+
+    // Required: Process single message - core business logic
     ProcessMessage(msg *client.BrokerMessage, base *BaseAgent) (*client.BrokerMessage, error)
 
-    // Optional: Lifecycle hooks
-    OnStart(base *BaseAgent) error  // Initialization
-    OnStop(base *BaseAgent)          // Cleanup
+    // Called at shutdown - cleanup resources, close connections
+    Cleanup(base *BaseAgent)
 }
 ```
 
@@ -92,12 +96,13 @@ type AgentRunner interface {
 ```go
 type DefaultAgentRunner struct{}
 
+func (d *DefaultAgentRunner) Init(base *BaseAgent) error { return nil }
+
 func (d *DefaultAgentRunner) ProcessMessage(msg *client.BrokerMessage, base *BaseAgent) (*client.BrokerMessage, error) {
     return msg, nil  // Pass-through by default
 }
 
-func (d *DefaultAgentRunner) OnStart(base *BaseAgent) error { return nil }
-func (d *DefaultAgentRunner) OnStop(base *BaseAgent) {}
+func (d *DefaultAgentRunner) Cleanup(base *BaseAgent) {}
 ```
 
 **Usage:**
@@ -105,7 +110,7 @@ func (d *DefaultAgentRunner) OnStop(base *BaseAgent) {}
 type MyAgent struct { agent.DefaultAgentRunner }
 
 func (a *MyAgent) ProcessMessage(msg *client.BrokerMessage, base *BaseAgent) (*client.BrokerMessage, error) {
-    // Override only ProcessMessage - lifecycle handled by default
+    // Override only ProcessMessage - Init/Cleanup handled by default
     result := transform(msg.Payload)
     return &client.BrokerMessage{Payload: result}, nil
 }
@@ -147,10 +152,10 @@ func Run(runner AgentRunner, agentType string) error {
     // 2. Create BaseAgent and connect to services
     // 3. Register with Support Service
     // 4. Fetch configuration
-    // 5. Call runner.OnStart()
+    // 5. Call runner.Init()
     // 6. Enter message processing loop
     // 7. Handle shutdown signals
-    // 8. Call runner.OnStop()
+    // 8. Call runner.Cleanup()
 
     return nil
 }
@@ -216,7 +221,7 @@ type IndexerAgent struct {
     storage *omnistore.Store
 }
 
-func (a *IndexerAgent) OnStart(base *BaseAgent) error {
+func (a *IndexerAgent) Init(base *BaseAgent) error {
     a.storage = omnistore.Open(base.GetConfig("storage_path").(string))
     return nil
 }
@@ -230,7 +235,7 @@ func (a *IndexerAgent) ProcessMessage(msg *client.BrokerMessage, base *BaseAgent
     return &client.BrokerMessage{Payload: data.ID}, nil
 }
 
-func (a *IndexerAgent) OnStop(base *BaseAgent) {
+func (a *IndexerAgent) Cleanup(base *BaseAgent) {
     a.storage.Close()
 }
 ```

@@ -183,3 +183,55 @@ func ParseTimeout(timeoutStr string) (int, error) {
 	}
 	return strconv.Atoi(timeoutStr)
 }
+
+// ValidateConfiguration validates that cells reference valid agent types and binaries exist
+func ValidateConfiguration(pool *PoolConfig, cells *CellsConfig) error {
+	// Build agent type lookup map
+	agentTypes := make(map[string]*AgentTypeConfig)
+	for i := range pool.AgentTypes {
+		agentType := &pool.AgentTypes[i]
+		agentTypes[agentType.AgentType] = agentType
+	}
+
+	// Validate each cell
+	var errors []string
+
+	for _, cell := range cells.Cells {
+		// Validate each agent in cell
+		for _, agent := range cell.Agents {
+			// Check if agent type exists in pool
+			agentTypeDef, exists := agentTypes[agent.AgentType]
+			if !exists {
+				errors = append(errors, fmt.Sprintf(
+					"cell '%s': agent '%s' references unknown agent_type '%s' (not found in pool.yaml)",
+					cell.ID, agent.ID, agent.AgentType))
+				continue
+			}
+
+			// Check if binary exists (only for spawn/call operators, not await)
+			if agentTypeDef.Operator != "await" && agentTypeDef.Binary != "" {
+				if !fileExists(agentTypeDef.Binary) {
+					errors = append(errors, fmt.Sprintf(
+						"cell '%s': agent '%s' (type '%s') references binary '%s' which does not exist",
+						cell.ID, agent.ID, agent.AgentType, agentTypeDef.Binary))
+				}
+			}
+		}
+	}
+
+	if len(errors) > 0 {
+		errMsg := "Configuration validation failed:\n"
+		for _, err := range errors {
+			errMsg += "  - " + err + "\n"
+		}
+		return fmt.Errorf("%s", errMsg)
+	}
+
+	return nil
+}
+
+// fileExists checks if a file exists
+func fileExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
+}

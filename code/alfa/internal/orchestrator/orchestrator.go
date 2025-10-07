@@ -13,6 +13,7 @@ import (
 	"github.com/tenzoki/agen/alfa/internal/ai"
 	"github.com/tenzoki/agen/alfa/internal/audio"
 	alfacontext "github.com/tenzoki/agen/alfa/internal/context"
+	"github.com/tenzoki/agen/alfa/internal/knowledge"
 	"github.com/tenzoki/agen/alfa/internal/project"
 	"github.com/tenzoki/agen/alfa/internal/speech"
 	"github.com/tenzoki/agen/alfa/internal/textpatch"
@@ -26,8 +27,8 @@ import (
 type Mode int
 
 const (
-	ModeConfirm  Mode = iota // Ask before each operation
-	ModeAllowAll             // Execute without confirmation
+	ModeConfirm     Mode = iota // Ask before each operation
+	ModeAutoConfirm             // Execute without confirmation
 )
 
 // Orchestrator coordinates all components
@@ -46,8 +47,9 @@ type Orchestrator struct {
 	recorder audio.Recorder
 	player   audio.Player
 
-	mode          Mode
-	maxIterations int
+	mode            Mode
+	maxIterations   int
+	allowSelfModify bool
 
 	conversationID string
 	running        bool
@@ -55,20 +57,21 @@ type Orchestrator struct {
 
 // Config holds orchestrator configuration
 type Config struct {
-	LLM            ai.LLM
-	ContextManager *alfacontext.Manager
-	ToolDispatcher *tools.Dispatcher
-	VCR            *vcr.Vcr
-	ProjectVFS     *vfs.VFS
-	ProjectManager *project.Manager
-	WorkbenchRoot  string
-	CellManager    *cellorchestrator.EmbeddedOrchestrator
-	STT            speech.STT
-	TTS            speech.TTS
-	Recorder       audio.Recorder
-	Player         audio.Player
-	Mode           Mode
-	MaxIterations  int
+	LLM             ai.LLM
+	ContextManager  *alfacontext.Manager
+	ToolDispatcher  *tools.Dispatcher
+	VCR             *vcr.Vcr
+	ProjectVFS      *vfs.VFS
+	ProjectManager  *project.Manager
+	WorkbenchRoot   string
+	CellManager     *cellorchestrator.EmbeddedOrchestrator
+	STT             speech.STT
+	TTS             speech.TTS
+	Recorder        audio.Recorder
+	Player          audio.Player
+	Mode            Mode
+	MaxIterations   int
+	AllowSelfModify bool
 }
 
 // New creates a new orchestrator instance
@@ -78,21 +81,22 @@ func New(cfg Config) *Orchestrator {
 	}
 
 	return &Orchestrator{
-		llm:            cfg.LLM,
-		contextMgr:     cfg.ContextManager,
-		toolDispatcher: cfg.ToolDispatcher,
-		vcr:            cfg.VCR,
-		projectVFS:     cfg.ProjectVFS,
-		projectManager: cfg.ProjectManager,
-		workbenchRoot:  cfg.WorkbenchRoot,
-		cellManager:    cfg.CellManager,
-		stt:            cfg.STT,
-		tts:            cfg.TTS,
-		recorder:       cfg.Recorder,
-		player:         cfg.Player,
-		mode:           cfg.Mode,
-		maxIterations:  cfg.MaxIterations,
-		conversationID: generateID(),
+		llm:             cfg.LLM,
+		contextMgr:      cfg.ContextManager,
+		toolDispatcher:  cfg.ToolDispatcher,
+		vcr:             cfg.VCR,
+		projectVFS:      cfg.ProjectVFS,
+		projectManager:  cfg.ProjectManager,
+		workbenchRoot:   cfg.WorkbenchRoot,
+		cellManager:     cfg.CellManager,
+		stt:             cfg.STT,
+		tts:             cfg.TTS,
+		recorder:        cfg.Recorder,
+		player:          cfg.Player,
+		mode:            cfg.Mode,
+		maxIterations:   cfg.MaxIterations,
+		allowSelfModify: cfg.AllowSelfModify,
+		conversationID:  generateID(),
 	}
 }
 
@@ -714,7 +718,23 @@ Example workflow with cells:
 	}() + `
 
 ` + func() string {
-		// Load core framework rules if available
+		// Load core framework rules if self-modification is enabled
+		if !o.allowSelfModify {
+			return `
+═══════════════════════════════════════════════════
+FRAMEWORK MODIFICATION RESTRICTIONS
+═══════════════════════════════════════════════════
+
+IMPORTANT: You are NOT allowed to modify framework code (code/ directory).
+- You can read framework code for understanding
+- You can work on user projects (workbench/projects/)
+- Framework modifications require --allow-self-modify flag
+
+═══════════════════════════════════════════════════
+
+`
+		}
+
 		coreRulesPath := filepath.Join(o.workbenchRoot, "../guidelines/core-rules.txt")
 		content, err := os.ReadFile(coreRulesPath)
 		if err != nil {
@@ -735,6 +755,53 @@ BEFORE modifying framework code (code/), ALWAYS:
    - Config changes: read_file("guidelines/references/config-standards.md")
 2. Verify compliance with core rules above
 3. If uncertain, ask the user before proceeding
+
+═══════════════════════════════════════════════════
+
+`
+	}() + func() string {
+		// Load knowledge base if cellorg is enabled
+		if !cellorgAvailable {
+			return ""
+		}
+
+		frameworkRoot := filepath.Dir(o.workbenchRoot)
+		extractor := knowledge.NewExtractor(frameworkRoot)
+
+		// Try to load generated knowledge docs
+		capabilities, err := extractor.LoadCapabilitiesDoc()
+		if err != nil {
+			return "" // Knowledge not yet extracted
+		}
+
+		agents, err := extractor.LoadAgentsDoc()
+		if err != nil {
+			return ""
+		}
+
+		cells, err := extractor.LoadCellsDoc()
+		if err != nil {
+			return ""
+		}
+
+		return `
+═══════════════════════════════════════════════════
+AGEN FRAMEWORK KNOWLEDGE BASE
+═══════════════════════════════════════════════════
+
+` + capabilities + `
+
+═══════════════════════════════════════════════════
+AVAILABLE AGENTS
+═══════════════════════════════════════════════════
+
+` + agents + `
+
+═══════════════════════════════════════════════════
+AVAILABLE CELLS
+═══════════════════════════════════════════════════
+
+` + cells + `
 
 ═══════════════════════════════════════════════════
 

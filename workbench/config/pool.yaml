@@ -3,31 +3,31 @@
 pool:
   agent_types:
     - agent_type: "file-ingester"
-      binary: "agents/file_ingester/main.go"
+      binary: "code/agents/file_ingester/main.go"
       operator: "call" # Default deployment strategy
       capabilities: ["file-ingestion", "directory-watching"]
       description: "Watches directories and ingests files"
 
     - agent_type: "text-transformer"
-      binary: "agents/text_transformer/main.go"
+      binary: "code/agents/text_transformer/main.go"
       operator: "spawn" # Process spawning (changed from await for demo)
       capabilities: ["text-processing", "transformation"]
       description: "Transforms text content"
 
     - agent_type: "file-writer"
-      binary: "agents/file_writer/main.go"
+      binary: "code/agents/file_writer/main.go"
       operator: "spawn" # Process spawning
       capabilities: ["file-writing", "data-persistence"]
       description: "Writes processed data to files"
 
     - agent_type: "godast-storage"
-      binary: "agents/godast_storage/main.go"
+      binary: "code/agents/godast_storage/main.go"
       operator: "spawn" # Process spawning
       capabilities: ["storage", "kv-store", "graph-database", "file-storage", "full-text-search", "persistence"]
       description: "Unified storage backend using Godast with KV, Graph, File, and Search capabilities"
 
     - agent_type: "adapter"
-      binary: "agents/adapter/main.go"
+      binary: "code/agents/adapter/main.go"
       operator: "spawn" # Process spawning
       capabilities:
         [
@@ -41,7 +41,7 @@ pool:
 
     # Text Extraction and Document Processing Agents (decomposed from dual-mode text-extractor)
     - agent_type: "text-extractor-native"
-      binary: "agents/text_extractor_native/main.go"
+      binary: "code/agents/text_extractor_native/main.go"
       operator: "spawn"
       capabilities:
         [
@@ -74,7 +74,7 @@ pool:
         border_removal: false
 
     - agent_type: "ocr-http-stub"
-      binary: "agents/ocr_http_stub/main.go"
+      binary: "code/agents/ocr_http_stub/main.go"
       operator: "await" # External HTTP service must be running
       capabilities:
         [
@@ -101,7 +101,7 @@ pool:
 
     # Document Processing Pipeline Agents (Framework-compliant)
     - agent_type: "strategy-selector"
-      binary: "agents/strategy_selector/main.go"
+      binary: "code/agents/strategy_selector/main.go"
       operator: "spawn" # Process spawning
       capabilities:
         [
@@ -118,7 +118,7 @@ pool:
         enable_content_analysis: true
 
     - agent_type: "text-chunker"
-      binary: "agents/text_chunker/main.go"
+      binary: "code/agents/text_chunker/main.go"
       operator: "spawn" # Process spawning
       capabilities:
         [
@@ -139,7 +139,7 @@ pool:
         temp_dir: "/tmp/gox-text-chunker"
 
     - agent_type: "context-enricher"
-      binary: "agents/context_enricher/main.go"
+      binary: "code/agents/context_enricher/main.go"
       operator: "spawn" # Process spawning
       capabilities:
         [
@@ -160,7 +160,7 @@ pool:
         context_depth: 3
 
     - agent_type: "chunk-writer"
-      binary: "agents/chunk_writer/main.go"
+      binary: "code/agents/chunk_writer/main.go"
       operator: "spawn" # Process spawning
       capabilities:
         [
@@ -196,7 +196,7 @@ pool:
 
     # Content Analysis Agents (Framework-compliant decomposition of chunk_processor)
     - agent_type: "text-analyzer"
-      binary: "agents/text_analyzer/main.go"
+      binary: "code/agents/text_analyzer/main.go"
       operator: "spawn"
       capabilities:
         [
@@ -218,7 +218,7 @@ pool:
         max_keywords: 20
 
     - agent_type: "json-analyzer"
-      binary: "agents/json_analyzer/main.go"
+      binary: "code/agents/json_analyzer/main.go"
       operator: "spawn"
       capabilities:
         [
@@ -241,7 +241,7 @@ pool:
         enable_minification: false
 
     - agent_type: "xml-analyzer"
-      binary: "agents/xml_analyzer/main.go"
+      binary: "code/agents/xml_analyzer/main.go"
       operator: "spawn"
       capabilities:
         [
@@ -264,7 +264,7 @@ pool:
         enable_minification: false
 
     - agent_type: "binary-analyzer"
-      binary: "agents/binary_analyzer/main.go"
+      binary: "code/agents/binary_analyzer/main.go"
       operator: "spawn"
       capabilities:
         [
@@ -287,7 +287,7 @@ pool:
         enable_compression: false
 
     - agent_type: "image-analyzer"
-      binary: "agents/image_analyzer/main.go"
+      binary: "code/agents/image_analyzer/main.go"
       operator: "spawn"
       capabilities:
         [
@@ -343,7 +343,7 @@ pool:
 
     # Synthesis Agents (Framework-compliant decomposition of chunk_synthesizer)
     - agent_type: "summary-generator"
-      binary: "agents/summary_generator/main.go"
+      binary: "code/agents/summary_generator/main.go"
       operator: "spawn"
       capabilities:
         [
@@ -364,7 +364,7 @@ pool:
         enable_sections: true
 
     - agent_type: "search-indexer"
-      binary: "agents/search_indexer/main.go"
+      binary: "code/agents/search_indexer/main.go"
       operator: "spawn"
       capabilities:
         [
@@ -385,7 +385,7 @@ pool:
         score_threshold: 0.1
 
     - agent_type: "metadata-collector"
-      binary: "agents/metadata_collector/main.go"
+      binary: "code/agents/metadata_collector/main.go"
       operator: "spawn"
       capabilities:
         [
@@ -405,7 +405,7 @@ pool:
         max_metadata_size: 10485760
 
     - agent_type: "report-generator"
-      binary: "agents/report_generator/main.go"
+      binary: "code/agents/report_generator/main.go"
       operator: "spawn"
       capabilities:
         [
@@ -426,7 +426,7 @@ pool:
         max_recommendations: 5
 
     - agent_type: "dataset-builder"
-      binary: "agents/dataset_builder/main.go"
+      binary: "code/agents/dataset_builder/main.go"
       operator: "spawn"
       capabilities:
         [
@@ -449,7 +449,7 @@ pool:
 
     # RAG (Retrieval-Augmented Generation) Agents
     - agent_type: "embedding-agent"
-      binary: "agents/embedding_agent/main.go"
+      binary: "code/agents/embedding_agent/main.go"
       operator: "spawn"
       capabilities:
         [
@@ -469,7 +469,7 @@ pool:
         dimensions: 1536
 
     - agent_type: "vectorstore-agent"
-      binary: "agents/vectorstore_agent/main.go"
+      binary: "code/agents/vectorstore_agent/main.go"
       operator: "spawn"
       capabilities:
         [
@@ -490,7 +490,7 @@ pool:
         max_elements: 1000000
 
     - agent_type: "rag-agent"
-      binary: "agents/rag_agent/main.go"
+      binary: "code/agents/rag_agent/main.go"
       operator: "spawn"
       capabilities:
         [
@@ -510,7 +510,7 @@ pool:
 
     # Anonymization Pipeline Agents
     - agent_type: "anonymization-store"
-      binary: "agents/anonymization_store/main.go"
+      binary: "code/agents/anonymization_store/main.go"
       operator: "spawn"
       capabilities:
         [
@@ -528,7 +528,7 @@ pool:
         enable_debug: false
 
     - agent_type: "ner-agent"
-      binary: "agents/ner_agent/main.go"
+      binary: "code/agents/ner_agent/main.go"
       operator: "spawn"
       capabilities:
         [
@@ -548,7 +548,7 @@ pool:
         enable_debug: false
 
     - agent_type: "anonymizer"
-      binary: "agents/anonymizer/main.go"
+      binary: "code/agents/anonymizer/main.go"
       operator: "spawn"
       capabilities:
         [

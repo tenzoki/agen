@@ -290,7 +290,7 @@ type StorageAgent struct {
     store *omnistore.Store
 }
 
-func (a *StorageAgent) OnStart(base *agent.BaseAgent) error {
+func (a *StorageAgent) Init(base *agent.BaseAgent) error {
     a.store = omnistore.Open(base.GetConfig("storage_path").(string))
     return nil
 }

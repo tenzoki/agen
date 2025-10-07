@@ -22,17 +22,20 @@ broker:
   codec: "json"
   debug: true
 
-# Base directory for relative paths (relative to this config file)
+# Base directory for relative paths
 basedir:
-  - "."
+  - "workbench/config"
 
 # Agent type definitions
 pool:
   - "pool.yaml"
 
-# Cell definitions (modular YAML files)
+# Cell definitions (modular YAML files organized by purpose)
 cells:
-  - "cells/*.yaml"
+  - "cells/pipelines/*.yaml"
+  - "cells/services/*.yaml"
+  - "cells/analysis/*.yaml"
+  - "cells/synthesis/*.yaml"
 
 await-timeout_seconds: 300
 await_support_reboot_seconds: 300

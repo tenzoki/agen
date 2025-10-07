@@ -1,0 +1,8 @@
+# Projects Directory
+
+This directory contains user projects, each with their own git repository.
+
+Projects are isolated and not tracked in the framework repository.
+Each project has its own VCR (Version Control Repository) at: projects/<name>/.git
+
+See: guidelines/references/architecture.md for VCR isolation principles

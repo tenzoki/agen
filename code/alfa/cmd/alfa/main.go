@@ -11,7 +11,9 @@ import (
 
 	"github.com/tenzoki/agen/alfa/internal/ai"
 	"github.com/tenzoki/agen/alfa/internal/audio"
+	alfaconfig "github.com/tenzoki/agen/alfa/internal/config"
 	alfacontext "github.com/tenzoki/agen/alfa/internal/context"
+	"github.com/tenzoki/agen/alfa/internal/knowledge"
 	"github.com/tenzoki/agen/alfa/internal/orchestrator"
 	"github.com/tenzoki/agen/alfa/internal/project"
 	"github.com/tenzoki/agen/alfa/internal/sandbox"
@@ -24,44 +26,74 @@ import (
 
 func main() {
 	var (
-		workbench      = flag.String("workbench", "workbench", "Workbench directory")
-		configFile     = flag.String("config", "", "Config file path (default: config/ai-config.json)")
-		mode           = flag.String("mode", "confirm", "Execution mode: confirm or allow-all")
-		provider       = flag.String("provider", "", "AI provider override (anthropic or openai)")
-		iterations     = flag.Int("max-iterations", 10, "Maximum AI iterations per request")
-		enableVoice    = flag.Bool("voice", false, "Enable voice input/output (requires OPENAI_API_KEY and sox)")
-		headless       = flag.Bool("headless", false, "Headless mode: enables voice + allow-all (autonomous voice agent)")
-		useSandbox     = flag.Bool("sandbox", false, "Use Docker sandbox for command execution (requires Docker)")
-		sandboxImage   = flag.String("sandbox-image", "golang:1.24-alpine", "Docker image for sandbox")
-		projectName    = flag.String("project", "", "Project name (creates if doesn't exist)")
-		listProjects   = flag.Bool("list-projects", false, "List all projects and exit")
-		createProject  = flag.String("create-project", "", "Create a new project and exit")
-		deleteProject  = flag.String("delete-project", "", "Delete a project (keeps backup) and exit")
-		restoreProject = flag.String("restore-project", "", "Restore a deleted project and exit")
-		enableCellorg  = flag.Bool("enable-cellorg", false, "Enable cellorg advanced features (cells, RAG, etc.)")
-		cellorgConfig  = flag.String("cellorg-config", "config", "Path to cellorg configuration directory")
-		captureOutput  = flag.Bool("capture-output", true, "Capture command output to show AI (default: true)")
-		maxOutputKB    = flag.Int("max-output", 10, "Maximum output size in KB to show AI (default: 10)")
+		workbench         = flag.String("workbench", "", "Workbench directory (default: workbench)")
+		configFile        = flag.String("config", "", "AI config file path (default: workbench/config/ai-config.json)")
+		autoConfirm       = flag.Bool("auto-confirm", false, "Auto-confirm all operations")
+		provider          = flag.String("provider", "", "AI provider override (anthropic or openai)")
+		iterations        = flag.Int("max-iterations", 0, "Maximum AI iterations per request")
+		enableVoice       = flag.Bool("voice", false, "Enable voice input/output (requires OPENAI_API_KEY and sox)")
+		headless          = flag.Bool("headless", false, "Headless mode: enables voice + auto-confirm")
+		useSandbox        = flag.Bool("sandbox", false, "Use Docker sandbox for command execution")
+		sandboxImage      = flag.String("sandbox-image", "", "Docker image for sandbox")
+		projectName       = flag.String("project", "", "Project name (creates if doesn't exist)")
+		listProjects      = flag.Bool("list-projects", false, "List all projects and exit")
+		createProject     = flag.String("create-project", "", "Create a new project and exit")
+		deleteProject     = flag.String("delete-project", "", "Delete a project (keeps backup) and exit")
+		restoreProject    = flag.String("restore-project", "", "Restore a deleted project and exit")
+		enableCellorg     = flag.Bool("enable-cellorg", false, "Enable cellorg advanced features")
+		cellorgConfig     = flag.String("cellorg-config", "", "Path to cellorg configuration directory")
+		captureOutput     = flag.Bool("capture-output", true, "Capture command output to show AI")
+		maxOutputKB       = flag.Int("max-output", 0, "Maximum output size in KB to show AI")
+		allowSelfModify   = flag.Bool("allow-self-modify", false, "Allow AI to modify framework code")
 	)
 
 	flag.Parse()
 
-	// Headless mode activates voice + allow-all
-	if *headless {
-		*enableVoice = true
-		*mode = "allow-all"
+	// Determine workbench directory (CLI has priority)
+	workbenchDir := determineWorkbenchPath(*workbench)
+
+	// Load or create alfa.yaml configuration
+	cfg, err := alfaconfig.LoadOrCreate(workbenchDir)
+	if err != nil {
+		fatal("Failed to load configuration: %v", err)
 	}
 
-	// Resolve workbench directory
-	workbenchDir, err := os.Getwd()
-	if err != nil {
-		fatal("Failed to get working directory: %v", err)
+	// Apply CLI overrides (CLI has priority over alfa.yaml)
+	cliFlags := alfaconfig.CLIFlags{
+		Workbench:       *workbench,
+		ConfigFile:      *configFile,
+		AutoConfirm:     *autoConfirm,
+		Provider:        *provider,
+		MaxIterations:   *iterations,
+		Voice:           *enableVoice,
+		Headless:        *headless,
+		Sandbox:         *useSandbox,
+		SandboxImage:    *sandboxImage,
+		Project:         *projectName,
+		EnableCellorg:   *enableCellorg,
+		CellorgConfig:   *cellorgConfig,
+		CaptureOutput:   captureOutput,
+		MaxOutputKB:     *maxOutputKB,
+		AllowSelfModify: *allowSelfModify,
 	}
-	// If a custom workbench path is provided, use it; otherwise use ./workbench
-	if *workbench != "workbench" {
-		workbenchDir = *workbench
-	} else {
-		workbenchDir = filepath.Join(workbenchDir, "workbench")
+	cfg.ApplyCLIOverrides(cliFlags)
+
+	// Update workbench path in case it was changed by CLI
+	workbenchDir = cfg.Workbench.Path
+
+	// Save the final configuration back to alfa.yaml
+	configPath := alfaconfig.ResolveConfigPath(workbenchDir)
+	if err := alfaconfig.SaveConfig(configPath, cfg); err != nil {
+		fmt.Printf("⚠️  Warning: Failed to save configuration: %v\n", err)
+	}
+
+	// Extract knowledge base if needed
+	frameworkRoot := filepath.Dir(workbenchDir)
+	extractor := knowledge.NewExtractor(frameworkRoot)
+	if extractor.IsStale() {
+		if err := extractor.Extract(); err != nil {
+			fmt.Printf("⚠️  Warning: Knowledge extraction failed: %v\n", err)
+		}
 	}
 
 	// Initialize project manager
@@ -88,8 +120,8 @@ func main() {
 		return
 	}
 
-	// Determine which project to use
-	selectedProject := *projectName
+	// Determine which project to use (from config or context)
+	selectedProject := cfg.Workbench.Project
 	if selectedProject == "" {
 		// Load from context manager
 		contextMgr := alfacontext.NewManager(workbenchDir)
@@ -142,32 +174,37 @@ func main() {
 	fmt.Printf("Workbench: %s\n", workbenchVFS.Root())
 	fmt.Printf("Project:   %s (%s)\n\n", selectedProject, projectVFS.Root())
 
-	// Determine config file path
-	cfgPath := *configFile
-	if cfgPath == "" {
-		// Use workbench config directory
-		cfgPath = filepath.Join(workbenchDir, "config", "ai-config.json")
+	// Load AI configuration (either from ai-config.json or use embedded config)
+	var aiCfg *ai.ConfigFile
+	aiConfigPath := cfg.AI.ConfigFile
+	if aiConfigPath == "" {
+		aiConfigPath = filepath.Join(workbenchDir, "config", "ai-config.json")
 	}
 
-	// Load configuration
-	cfg, err := ai.LoadConfigWithEnv(cfgPath)
+	// Try loading from file, fallback to embedded config
+	aiCfg, err = ai.LoadConfigWithEnv(aiConfigPath)
 	if err != nil {
-		fatal("Failed to load config: %v", err)
+		if os.IsNotExist(err) {
+			// Use embedded config from alfa.yaml
+			aiCfg = convertToAIConfig(cfg)
+		} else {
+			fatal("Failed to load AI config: %v", err)
+		}
 	}
 
-	// Determine which provider to use
-	selectedProvider := *provider
+	// Override provider if specified
+	selectedProvider := cfg.AI.Provider
 	if selectedProvider == "" {
-		selectedProvider = cfg.DefaultProvider
+		selectedProvider = aiCfg.DefaultProvider
 	}
 
 	// Validate provider exists in config
-	if _, ok := cfg.Providers[selectedProvider]; !ok {
-		fatal("Provider '%s' not found in config. Available providers: %v", selectedProvider, getProviderNames(cfg))
+	if _, ok := aiCfg.Providers[selectedProvider]; !ok {
+		fatal("Provider '%s' not found in config. Available providers: %v", selectedProvider, getProviderNames(aiCfg))
 	}
 
 	// Create LLM client from config
-	llm, err := ai.NewLLMFromConfig(cfg, selectedProvider)
+	llm, err := ai.NewLLMFromConfig(aiCfg, selectedProvider)
 	if err != nil {
 		fatal("Failed to create LLM client: %v", err)
 	}
@@ -178,7 +215,7 @@ func main() {
 	var recorder audio.Recorder
 	var player audio.Player
 
-	if *enableVoice {
+	if cfg.Voice.Enabled {
 		openaiKey := os.Getenv("OPENAI_API_KEY")
 		if openaiKey == "" {
 			fatal("Voice mode requires OPENAI_API_KEY environment variable")
@@ -223,15 +260,15 @@ func main() {
 
 	// Setup sandbox if enabled
 	var sb sandbox.Sandbox
-	if *useSandbox {
+	if cfg.Sandbox.Enabled {
 		sandboxCfg := sandbox.DefaultConfig()
-		sandboxCfg.DefaultImage = *sandboxImage
+		sandboxCfg.DefaultImage = cfg.Sandbox.Image
 		sb = sandbox.NewDockerSandbox(sandboxCfg)
 
 		if !sb.IsAvailable() {
 			fmt.Println("⚠️  Warning: Docker not available. Sandbox disabled.")
 			fmt.Println("   Install Docker Desktop or docker engine.")
-			*useSandbox = false
+			cfg.Sandbox.Enabled = false
 			sb = nil
 		} else {
 			fmt.Println("🐳 Docker sandbox enabled")
@@ -241,17 +278,18 @@ func main() {
 	// Create components
 	contextMgr := alfacontext.NewManager(workbenchVFS.Root())
 	contextMgr.SetActiveProject(selectedProject)
-	toolDispatcher := tools.NewDispatcherWithSandbox(projectVFS, sb, *useSandbox)
+	toolDispatcher := tools.NewDispatcherWithSandbox(projectVFS, sb, cfg.Sandbox.Enabled)
 	toolDispatcher.SetProjectManager(projectMgr)
-	toolDispatcher.SetOutputCapture(*captureOutput, *maxOutputKB*1024) // Convert KB to bytes
+	toolDispatcher.SetOutputCapture(cfg.Output.CaptureEnabled, cfg.Output.MaxSizeKB*1024) // Convert KB to bytes
+	toolDispatcher.SetConfig(cfg, configPath) // Enable runtime config management
 	vcrInstance := vcr.NewVcr("assistant", projectVFS.Root())
 
 	// Initialize Cellorg if enabled
 	var cellMgr *cellorchestrator.EmbeddedOrchestrator
-	if *enableCellorg {
+	if cfg.Cellorg.Enabled {
 		fmt.Println("🔧 Initializing cellorg advanced features...")
 		cellMgr, err = cellorchestrator.NewEmbedded(cellorchestrator.Config{
-			ConfigPath:      *cellorgConfig,
+			ConfigPath:      cfg.Cellorg.ConfigPath,
 			DefaultDataRoot: workbenchDir,
 			Debug:           true,
 		})
@@ -267,28 +305,29 @@ func main() {
 
 	// Parse mode
 	var execMode orchestrator.Mode
-	if *mode == "allow-all" {
-		execMode = orchestrator.ModeAllowAll
+	if cfg.Execution.AutoConfirm {
+		execMode = orchestrator.ModeAutoConfirm
 	} else {
 		execMode = orchestrator.ModeConfirm
 	}
 
 	// Create orchestrator
 	orch := orchestrator.New(orchestrator.Config{
-		LLM:            llm,
-		ContextManager: contextMgr,
-		ToolDispatcher: toolDispatcher,
-		VCR:            vcrInstance,
-		ProjectVFS:     projectVFS,
-		ProjectManager: projectMgr,
-		WorkbenchRoot:  workbenchDir,
-		CellManager:    cellMgr,
-		STT:            stt,
-		TTS:            tts,
-		Recorder:       recorder,
-		Player:         player,
-		Mode:           execMode,
-		MaxIterations:  *iterations,
+		LLM:             llm,
+		ContextManager:  contextMgr,
+		ToolDispatcher:  toolDispatcher,
+		VCR:             vcrInstance,
+		ProjectVFS:      projectVFS,
+		ProjectManager:  projectMgr,
+		WorkbenchRoot:   workbenchDir,
+		CellManager:     cellMgr,
+		STT:             stt,
+		TTS:             tts,
+		Recorder:        recorder,
+		Player:          player,
+		Mode:            execMode,
+		MaxIterations:   cfg.Execution.MaxIterations,
+		AllowSelfModify: cfg.SelfModify.Allowed,
 	})
 
 	// Cleanup on exit
@@ -311,6 +350,66 @@ func main() {
 func fatal(format string, args ...interface{}) {
 	fmt.Fprintf(os.Stderr, "Fatal: "+format+"\n", args...)
 	os.Exit(1)
+}
+
+// determineWorkbenchPath resolves the workbench directory path
+// Priority: CLI arg > default "workbench" in current directory
+func determineWorkbenchPath(cliWorkbench string) string {
+	if cliWorkbench != "" {
+		// Absolute or relative path provided
+		if filepath.IsAbs(cliWorkbench) {
+			return cliWorkbench
+		}
+		// Make absolute
+		absPath, err := filepath.Abs(cliWorkbench)
+		if err != nil {
+			fatal("Failed to resolve workbench path: %v", err)
+		}
+		return absPath
+	}
+
+	// Default: workbench in current directory
+	pwd, err := os.Getwd()
+	if err != nil {
+		fatal("Failed to get working directory: %v", err)
+	}
+	return filepath.Join(pwd, "workbench")
+}
+
+// convertToAIConfig converts alfa config to AI config format
+func convertToAIConfig(cfg *alfaconfig.AlfaConfig) *ai.ConfigFile {
+	aiCfg := &ai.ConfigFile{
+		DefaultProvider: cfg.AI.Provider,
+		Providers:       make(map[string]ai.Config),
+	}
+
+	for name, provider := range cfg.AI.Providers {
+		aiCfg.Providers[name] = ai.Config{
+			Model:       provider.Model,
+			MaxTokens:   provider.MaxTokens,
+			Temperature: provider.Temperature,
+			Timeout:     provider.Timeout,
+			RetryCount:  provider.RetryCount,
+			RetryDelay:  provider.RetryDelay,
+		}
+	}
+
+	// Merge with environment variables for API keys
+	if anthropicKey := os.Getenv("ANTHROPIC_API_KEY"); anthropicKey != "" {
+		if providerCfg, ok := aiCfg.Providers["anthropic"]; ok {
+			providerCfg.APIKey = anthropicKey
+			aiCfg.Providers["anthropic"] = providerCfg
+		}
+	}
+
+	if openaiKey := os.Getenv("OPENAI_API_KEY"); openaiKey != "" {
+		if providerCfg, ok := aiCfg.Providers["openai"]; ok {
+			providerCfg.APIKey = openaiKey
+			aiCfg.Providers["openai"] = providerCfg
+		}
+	}
+
+	return aiCfg
 }
 
 func getProviderNames(cfg *ai.ConfigFile) []string {

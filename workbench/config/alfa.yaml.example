@@ -1,0 +1,74 @@
+# Alfa Configuration
+# This file is automatically created and updated by alfa
+# CLI arguments always take priority over these settings
+
+# Workbench configuration
+workbench:
+  path: workbench                  # Workbench directory path
+  project: ""                      # Default project name (empty = use context or prompt)
+
+# AI provider configuration
+ai:
+  provider: anthropic              # Default provider: "anthropic" or "openai"
+  config_file: ""                  # Path to ai-config.json (empty = workbench/config/ai-config.json)
+  providers:
+    anthropic:
+      model: claude-3-5-sonnet-20241022
+      max_tokens: 4096
+      temperature: 1.0
+      timeout: 1m0s
+      retry_count: 3
+      retry_delay: 1s
+    openai:
+      model: gpt-4
+      max_tokens: 4096
+      temperature: 1.0
+      timeout: 1m0s
+      retry_count: 3
+      retry_delay: 1s
+
+# Voice input/output configuration
+voice:
+  enabled: false                   # Enable voice mode (requires OPENAI_API_KEY and sox)
+  headless: false                  # Headless mode (voice + auto-confirm)
+
+# Execution behavior
+execution:
+  auto_confirm: false              # Auto-confirm all operations
+  max_iterations: 10               # Maximum AI iterations per request
+
+# Docker sandbox configuration
+sandbox:
+  enabled: false                   # Use Docker sandbox for command execution
+  image: golang:1.24-alpine        # Docker image for sandbox
+
+# Cellorg integration
+cellorg:
+  enabled: false                   # Enable cellorg advanced features (cells, RAG, etc.)
+  config_path: config              # Path to cellorg configuration directory
+
+# Output capture
+output:
+  capture_enabled: true            # Capture command output to show AI
+  max_size_kb: 10                  # Maximum output size in KB to show AI
+
+# Self-modification
+self_modify:
+  allowed: false                   # Allow AI to modify framework code
+
+# Usage:
+#
+# 1. First run: alfa creates this file with defaults
+# 2. Edit values as needed
+# 3. CLI args override these settings:
+#    --workbench, --project, --provider, --voice, --headless,
+#    --auto-confirm, --max-iterations, --sandbox, --sandbox-image,
+#    --enable-cellorg, --cellorg-config, --capture-output,
+#    --max-output, --allow-self-modify
+# 4. Changes are saved back to this file
+#
+# Examples:
+#   alfa                                    # Uses alfa.yaml settings
+#   alfa --provider openai                  # Override provider
+#   alfa --voice --auto-confirm             # Enable voice + auto-confirm
+#   alfa --project my-app --enable-cellorg  # Set project + enable cellorg
