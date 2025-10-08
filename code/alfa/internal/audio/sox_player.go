@@ -1,13 +1,14 @@
 package audio
 
 import (
-	"fmt"
 	"os/exec"
+	"sync"
 )
 
 // SoxPlayer implements Player using the sox 'play' command
 type SoxPlayer struct {
 	currentCmd *exec.Cmd
+	mu         sync.Mutex
 }
 
 // NewSoxPlayer creates a new sox-based player
@@ -35,27 +36,47 @@ func (p *SoxPlayer) Play(filePath string) error {
 		}
 	}
 
+	var cmd *exec.Cmd
+
 	// Try afplay first (native macOS)
 	if _, err := exec.LookPath("afplay"); err == nil {
-		cmd := exec.Command("afplay", filePath)
-		output, err := cmd.CombinedOutput()
-		if err != nil {
-			return &Error{
-				Operation: "play",
-				Message:   fmt.Sprintf("afplay failed: %s", string(output)),
-				Err:       err,
-			}
-		}
-		return nil
+		cmd = exec.Command("afplay", filePath)
+	} else {
+		// Fallback to sox play
+		cmd = exec.Command("play", "-q", filePath) // -q for quiet
 	}
 
-	// Fallback to sox play
-	cmd := exec.Command("play", "-q", filePath) // -q for quiet
-	output, err := cmd.CombinedOutput()
-	if err != nil {
+	// Store command so it can be stopped
+	p.mu.Lock()
+	p.currentCmd = cmd
+	p.mu.Unlock()
+
+	// Start the process
+	if err := cmd.Start(); err != nil {
+		p.mu.Lock()
+		p.currentCmd = nil
+		p.mu.Unlock()
 		return &Error{
 			Operation: "play",
-			Message:   fmt.Sprintf("play failed: %s", string(output)),
+			Message:   "failed to start playback",
+			Err:       err,
+		}
+	}
+
+	// Wait for completion (can be interrupted by Stop())
+	err := cmd.Wait()
+	p.mu.Lock()
+	p.currentCmd = nil
+	p.mu.Unlock()
+
+	if err != nil {
+		// If killed by Stop(), don't return error
+		if err.Error() == "signal: killed" {
+			return nil
+		}
+		return &Error{
+			Operation: "play",
+			Message:   "playback failed",
 			Err:       err,
 		}
 	}
@@ -72,27 +93,27 @@ func (p *SoxPlayer) PlayAsync(filePath string) error {
 		}
 	}
 
+	var cmd *exec.Cmd
+
 	// Try afplay first (native macOS)
 	if _, err := exec.LookPath("afplay"); err == nil {
-		cmd := exec.Command("afplay", filePath)
-		p.currentCmd = cmd
-		if err := cmd.Start(); err != nil {
-			return &Error{
-				Operation: "play",
-				Message:   "failed to start afplay",
-				Err:       err,
-			}
-		}
-		return nil
+		cmd = exec.Command("afplay", filePath)
+	} else {
+		// Fallback to sox play
+		cmd = exec.Command("play", "-q", filePath)
 	}
 
-	// Fallback to sox play
-	cmd := exec.Command("play", "-q", filePath)
+	p.mu.Lock()
 	p.currentCmd = cmd
+	p.mu.Unlock()
+
 	if err := cmd.Start(); err != nil {
+		p.mu.Lock()
+		p.currentCmd = nil
+		p.mu.Unlock()
 		return &Error{
 			Operation: "play",
-			Message:   "failed to start play",
+			Message:   "failed to start playback",
 			Err:       err,
 		}
 	}
@@ -102,6 +123,9 @@ func (p *SoxPlayer) PlayAsync(filePath string) error {
 
 // Stop stops current playback
 func (p *SoxPlayer) Stop() error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
 	if p.currentCmd == nil || p.currentCmd.Process == nil {
 		return nil // Nothing to stop
 	}
@@ -114,6 +138,5 @@ func (p *SoxPlayer) Stop() error {
 		}
 	}
 
-	p.currentCmd = nil
 	return nil
 }

@@ -16,18 +16,29 @@ import (
 	cellorchestrator "github.com/tenzoki/agen/cellorg/public/orchestrator"
 )
 
+// VoiceController interface for enabling/disabling voice
+type VoiceController interface {
+	EnableVoice() error
+	EnableVoiceInput() error
+	EnableVoiceOutput() error
+	DisableVoice()
+	DisableVoiceInput()
+	DisableVoiceOutput()
+}
+
 // Dispatcher executes tool operations
 type Dispatcher struct {
-	vfs            *vfs.VFS
-	sandbox        sandbox.Sandbox
-	projectManager *project.Manager
-	cellManager    *cellorchestrator.EmbeddedOrchestrator
-	config         *alfaconfig.AlfaConfig
-	configPath     string
-	timeout        time.Duration
-	useSandbox     bool
-	captureOutput  bool
-	maxOutputBytes int
+	vfs             *vfs.VFS
+	sandbox         sandbox.Sandbox
+	projectManager  *project.Manager
+	cellManager     *cellorchestrator.EmbeddedOrchestrator
+	config          *alfaconfig.AlfaConfig
+	configPath      string
+	voiceController VoiceController
+	timeout         time.Duration
+	useSandbox      bool
+	captureOutput   bool
+	maxOutputBytes  int
 }
 
 // NewDispatcher creates a new tool dispatcher with VFS
@@ -86,6 +97,19 @@ func (d *Dispatcher) SetCellManager(cm *cellorchestrator.EmbeddedOrchestrator) {
 func (d *Dispatcher) SetConfig(cfg *alfaconfig.AlfaConfig, configPath string) {
 	d.config = cfg
 	d.configPath = configPath
+}
+
+// SetVoiceController sets the voice controller for runtime voice management
+func (d *Dispatcher) SetVoiceController(vc VoiceController) {
+	d.voiceController = vc
+}
+
+// IsAutoConfirmEnabled returns the current auto-confirm setting
+func (d *Dispatcher) IsAutoConfirmEnabled() bool {
+	if d.config == nil {
+		return false
+	}
+	return d.config.Execution.AutoConfirm
 }
 
 // GetSandbox returns the sandbox instance
@@ -1326,6 +1350,7 @@ func (d *Dispatcher) executeConfigSet(action Action) Result {
 		"sandbox.image",
 		"cellorg.enabled",
 		"cellorg.config_path",
+		"voice.headless", // voice.input_enabled and voice.output_enabled can be changed at runtime
 	}
 
 	for _, rs := range restartSettings {
@@ -1347,6 +1372,44 @@ func (d *Dispatcher) executeConfigSet(action Action) Result {
 		d.captureOutput = d.config.Output.CaptureEnabled
 		d.maxOutputBytes = d.config.Output.MaxSizeKB * 1024
 		message += " (applied immediately)"
+	case "voice.input_enabled":
+		// Enable or disable voice input at runtime
+		if d.voiceController != nil {
+			if d.config.Voice.InputEnabled {
+				if err := d.voiceController.EnableVoiceInput(); err != nil {
+					return Result{
+						Action:  action,
+						Success: false,
+						Message: fmt.Sprintf("failed to enable voice input: %v", err),
+					}
+				}
+				message += " (voice input activated)"
+			} else {
+				d.voiceController.DisableVoiceInput()
+				message += " (voice input deactivated)"
+			}
+		} else {
+			message += " (restart alfa to apply changes)"
+		}
+	case "voice.output_enabled":
+		// Enable or disable voice output at runtime
+		if d.voiceController != nil {
+			if d.config.Voice.OutputEnabled {
+				if err := d.voiceController.EnableVoiceOutput(); err != nil {
+					return Result{
+						Action:  action,
+						Success: false,
+						Message: fmt.Sprintf("failed to enable voice output: %v", err),
+					}
+				}
+				message += " (voice output activated)"
+			} else {
+				d.voiceController.DisableVoiceOutput()
+				message += " (voice output deactivated)"
+			}
+		} else {
+			message += " (restart alfa to apply changes)"
+		}
 	}
 
 	return Result{
@@ -1381,7 +1444,7 @@ func (d *Dispatcher) executeConfigList(action Action) Result {
 	categories := map[string][]string{
 		"Workbench":      {"workbench.path", "workbench.project"},
 		"AI Provider":    {"ai.provider", "ai.config_file"},
-		"Voice":          {"voice.enabled", "voice.headless"},
+		"Voice":          {"voice.input_enabled", "voice.output_enabled", "voice.headless"},
 		"Execution":      {"execution.auto_confirm", "execution.max_iterations"},
 		"Sandbox":        {"sandbox.enabled", "sandbox.image"},
 		"Cellorg":        {"cellorg.enabled", "cellorg.config_path"},

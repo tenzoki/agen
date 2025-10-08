@@ -1,0 +1,300 @@
+# Phase 4: Cellorg Token Budget Integration - Configuration Example
+# This file demonstrates how to configure agents to use automatic envelope chunking
+# for handling large payloads when communicating with AI-powered agents.
+
+# =============================================================================
+# Overview
+# =============================================================================
+#
+# Phase 4 adds transparent chunking support for agent-to-agent communication:
+#
+# 1. Sending agents can automatically chunk large envelopes before publishing
+# 2. Receiving agents automatically reassemble chunks
+# 3. Token limits are respected based on target AI provider
+# 4. No agent code changes required - handled by framework
+#
+# =============================================================================
+
+# =============================================================================
+# Agent Configuration with Token Budget
+# =============================================================================
+
+# Example 1: AI-Powered Agent that receives large documents
+agents:
+  document_analyzer:
+    type: document_analyzer
+    description: "Analyzes large documents using Claude"
+
+    # AI Provider configuration
+    ai_provider: anthropic
+    ai_model: claude-sonnet-4-5-20250929
+
+    # Token budget configuration (optional)
+    # If not specified, uses model defaults from omni/tokencount
+    token_budget:
+      # Enable automatic chunking for incoming large envelopes
+      auto_chunk: true
+
+      # Safety margin (default: 0.10 = 10%)
+      # Reserves extra space to avoid hitting token limits
+      safety_margin: 0.10
+
+      # Maximum tokens per chunk (optional override)
+      # If not specified, calculated automatically based on model limits
+      # max_chunk_tokens: 150000
+
+      # Chunk overlap for context preservation (optional)
+      # Useful for document analysis where context matters
+      # chunk_overlap: 0.15  # 15% overlap between chunks
+
+    # Connection configuration
+    ingress:
+      type: pipe
+      name: documents-in
+
+    egress:
+      type: topic
+      name: analysis-results
+
+  # Example 2: Text processing agent with custom token limits
+  text_summarizer:
+    type: text_summarizer
+    description: "Summarizes large text documents"
+
+    ai_provider: openai
+    ai_model: gpt-5
+
+    token_budget:
+      auto_chunk: true
+      safety_margin: 0.15
+
+    ingress:
+      type: pipe
+      name: text-in
+
+    egress:
+      type: topic
+      name: summaries
+
+  # Example 3: Data ingestion agent that sends large payloads
+  file_ingester:
+    type: file_ingester
+    description: "Ingests files and sends to processing agents"
+
+    # This agent sends data, so it needs to know about downstream AI agents
+    # The framework will automatically chunk outgoing envelopes
+    downstream_agents:
+      - destination: document_analyzer
+        provider: anthropic
+        model: claude-sonnet-4-5-20250929
+      - destination: text_summarizer
+        provider: openai
+        model: gpt-5
+
+    ingress:
+      type: directory
+      path: /data/input
+
+    egress:
+      type: pipe
+      name: documents-in
+
+# =============================================================================
+# Using EnvelopeFramework in Agent Code
+# =============================================================================
+
+# Example agent using envelope framework with automatic chunking:
+#
+# ```go
+# package main
+#
+# import (
+#     "github.com/tenzoki/agen/cellorg/public/agent"
+#     "github.com/tenzoki/agen/cellorg/public/client"
+#     "github.com/tenzoki/agen/omni/tokencount"
+# )
+#
+# func main() {
+#     // Connect to broker
+#     brokerClient, _ := client.NewBrokerClient("localhost:9001", "my-agent")
+#
+#     // Create envelope framework
+#     envFramework := agent.NewEnvelopeFramework(brokerClient)
+#     defer envFramework.Close()
+#
+#     // Register AI providers for automatic chunking
+#     anthropicCounter, _ := tokencount.NewCounter(tokencount.Config{
+#         Provider: "anthropic",
+#         Model:    "claude-sonnet-4-5-20250929",
+#     })
+#     envFramework.RegisterProvider("document_analyzer", anthropicCounter)
+#
+#     // Subscribe to topic with automatic chunk reassembly
+#     envelopes, _ := envFramework.Subscribe("input-topic")
+#
+#     for env := range envelopes {
+#         // Process complete envelope (chunks automatically reassembled)
+#         processEnvelope(env)
+#
+#         // Publish result with automatic chunking if needed
+#         envFramework.Publish("output-topic", resultEnvelope)
+#     }
+# }
+# ```
+
+# =============================================================================
+# Chunking Behavior
+# =============================================================================
+
+# Automatic Chunking Decision:
+# - Framework calculates: PayloadTokens + HeaderTokens = TotalTokens
+# - If TotalTokens > (MaxContext - MaxOutput - ReserveTokens), chunking occurs
+# - Chunks are sent with metadata headers:
+#   * X-Chunk-ID: Unique ID grouping all chunks
+#   * X-Chunk-Index: Index of this chunk (0-based)
+#   * X-Chunk-Total: Total number of chunks
+#   * X-Original-ID: Original envelope ID
+
+# Chunk Reassembly:
+# - ChunkCollector accumulates chunks by X-Chunk-ID
+# - When all chunks received (based on X-Chunk-Total), merges and delivers
+# - Timeout: 5 minutes (configurable)
+# - Expired incomplete chunks are automatically cleaned up
+
+# Chunking Strategies:
+# 1. JSON Arrays: Split by array elements
+# 2. Text: Split at word boundaries with optional overlap
+# 3. Binary: Not supported (should be handled at application level)
+
+# =============================================================================
+# Provider-Specific Limits (Reference)
+# =============================================================================
+
+# These limits are automatically detected by omni/tokencount
+# Configuration here is for reference only
+
+provider_limits:
+  anthropic:
+    claude-sonnet-4-5-20250929:
+      max_context: 200000
+      max_output: 64000
+      default_reserve: 1000
+
+    claude-opus-4-1-20250805:
+      max_context: 200000
+      max_output: 32000
+      default_reserve: 1000
+
+    claude-sonnet-4-20250514:
+      max_context: 200000
+      max_output: 64000
+      default_reserve: 1000
+
+  openai:
+    gpt-5:
+      max_context: 272000
+      max_output: 128000
+      default_reserve: 1000
+
+    gpt-5-preview:
+      max_context: 272000
+      max_output: 128000
+      default_reserve: 1000
+
+# =============================================================================
+# Monitoring and Debugging
+# =============================================================================
+
+# Check chunk status in agent:
+# ```go
+# status := envFramework.GetChunkStatus()
+# for chunkID, s := range status {
+#     log.Printf("Chunk %s: %d/%d received, age: %v",
+#         chunkID, s.ReceivedCount, s.TotalCount, s.Age)
+# }
+#
+# pendingCount := envFramework.CountPendingChunks()
+# log.Printf("Pending chunk groups: %d", pendingCount)
+# ```
+
+# Chunk headers in envelope:
+# - Check envelope.Headers["X-Chunk-ID"] to detect chunked messages
+# - Check envelope.Headers["X-Original-ID"] for original envelope ID
+
+# =============================================================================
+# Migration Guide
+# =============================================================================
+
+# Existing agents continue to work without changes:
+# 1. BrokerMessage-based agents: No chunking (backward compatible)
+# 2. Envelope-based agents: Opt-in by using EnvelopeFramework
+# 3. Mixed environments: Chunked and non-chunked agents coexist
+
+# To add chunking to existing envelope-based agent:
+# 1. Replace direct BrokerClient usage with EnvelopeFramework
+# 2. Register AI providers for destinations
+# 3. Use Subscribe/Publish methods instead of client methods
+# 4. Framework handles the rest automatically
+
+# =============================================================================
+# Performance Considerations
+# =============================================================================
+
+# Overhead:
+# - Token counting: ~1-5ms per envelope
+# - Chunking: Depends on payload size and strategy
+# - Chunk reassembly: Minimal (in-memory map lookup)
+
+# Memory:
+# - Incomplete chunks stored in memory
+# - Automatic cleanup after 5-minute timeout
+# - Configure timeout via: agent.NewChunkCollector(customTimeout)
+
+# Network:
+# - Multiple chunks = multiple broker messages
+# - Consider compression for very large payloads (future enhancement)
+# - Monitor broker throughput if many large messages
+
+# =============================================================================
+# Troubleshooting
+# =============================================================================
+
+# Issue: Chunks not being reassembled
+# - Check X-Chunk-Total header matches actual chunk count
+# - Verify all chunks have same X-Chunk-ID
+# - Check for timeout (default 5 minutes)
+# - Look for errors in chunk collector
+
+# Issue: Envelope still exceeds token limit
+# - Verify token counter provider/model matches target agent
+# - Check safety_margin setting (may need to increase)
+# - Headers/metadata may be large (estimate is conservative)
+
+# Issue: Performance degradation
+# - Check number of pending chunks: envFramework.CountPendingChunks()
+# - Look for incomplete chunk groups that aren't timing out
+# - Consider reducing chunk timeout for faster cleanup
+
+# =============================================================================
+# Best Practices
+# =============================================================================
+
+# 1. Use EnvelopeFramework for all AI-powered agent communication
+# 2. Register providers explicitly rather than relying on defaults
+# 3. Monitor chunk status in production environments
+# 4. Set appropriate safety margins based on your use case
+# 5. Use JSON arrays when possible for cleaner chunking
+# 6. Test with large payloads during development
+# 7. Consider payload size limits at ingestion (before sending)
+
+# =============================================================================
+# Future Enhancements
+# =============================================================================
+
+# Planned features:
+# - Compression support for chunks
+# - Streaming chunk delivery
+# - Chunk retry logic
+# - Chunk prioritization
+# - Dynamic chunk size adjustment
+# - Provider auto-detection from agent registry

@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -44,25 +45,33 @@ type WorkbenchConfig struct {
 
 // AIConfig defines AI provider settings
 type AIConfig struct {
-	Provider    string                 `yaml:"provider" json:"provider"`         // "anthropic" or "openai"
-	ConfigFile  string                 `yaml:"config_file" json:"config_file"`   // Path to ai-config.json (optional)
-	Providers   map[string]ProviderConfig `yaml:"providers" json:"providers"`    // Provider-specific configs
+	Provider      string                    `yaml:"provider" json:"provider"`             // "anthropic" or "openai"
+	SelectedModel string                    `yaml:"selected_model" json:"selected_model"` // Selected model (optional, uses provider default if empty)
+	ConfigFile    string                    `yaml:"config_file" json:"config_file"`       // Path to ai-config.json (optional)
+	Providers     map[string]ProviderConfig `yaml:"providers" json:"providers"`           // Provider-specific configs
 }
 
-// ProviderConfig defines provider-specific settings
+// ProviderConfig defines provider-specific settings with multiple model support
 type ProviderConfig struct {
-	Model       string        `yaml:"model" json:"model"`
+	DefaultModel string                 `yaml:"default_model" json:"default_model"` // Default model for this provider
+	Models       map[string]ModelConfig `yaml:"models" json:"models"`               // Available models with their configs
+}
+
+// ModelConfig defines configuration for a specific model
+type ModelConfig struct {
 	MaxTokens   int           `yaml:"max_tokens" json:"max_tokens"`
 	Temperature float64       `yaml:"temperature" json:"temperature"`
 	Timeout     time.Duration `yaml:"timeout" json:"timeout"`
 	RetryCount  int           `yaml:"retry_count" json:"retry_count"`
 	RetryDelay  time.Duration `yaml:"retry_delay" json:"retry_delay"`
+	Description string        `yaml:"description,omitempty" json:"description,omitempty"` // Optional model description
 }
 
 // VoiceConfig defines voice input/output settings
 type VoiceConfig struct {
-	Enabled  bool   `yaml:"enabled" json:"enabled"`     // Enable voice mode
-	Headless bool   `yaml:"headless" json:"headless"`   // Headless mode (voice + auto-confirm)
+	InputEnabled  bool `yaml:"input_enabled" json:"input_enabled"`   // Enable voice input (STT)
+	OutputEnabled bool `yaml:"output_enabled" json:"output_enabled"` // Enable voice output (TTS)
+	Headless      bool `yaml:"headless" json:"headless"`             // Headless mode (voice + auto-confirm)
 }
 
 // ExecutionConfig defines execution behavior
@@ -102,30 +111,122 @@ func DefaultConfig() AlfaConfig {
 			Project: "",
 		},
 		AI: AIConfig{
-			Provider:   "anthropic",
-			ConfigFile: "", // Will use workbench/config/ai-config.json by default
+			Provider:      "anthropic",
+			SelectedModel: "", // Uses provider's default_model
+			ConfigFile:    "", // Will use workbench/config/ai-config.json by default
 			Providers: map[string]ProviderConfig{
 				"anthropic": {
-					Model:       "claude-3-5-sonnet-20241022",
-					MaxTokens:   4096,
-					Temperature: 1.0,
-					Timeout:     60 * time.Second,
-					RetryCount:  3,
-					RetryDelay:  1 * time.Second,
+					DefaultModel: "claude-3-5-sonnet-20241022",
+					Models: map[string]ModelConfig{
+						"claude-3-5-sonnet-20241022": {
+							MaxTokens:   4096,
+							Temperature: 1.0,
+							Timeout:     60 * time.Second,
+							RetryCount:  3,
+							RetryDelay:  1 * time.Second,
+							Description: "Most intelligent model, balanced performance",
+						},
+						"claude-3-opus-20240229": {
+							MaxTokens:   4096,
+							Temperature: 1.0,
+							Timeout:     60 * time.Second,
+							RetryCount:  3,
+							RetryDelay:  1 * time.Second,
+							Description: "Powerful model for complex tasks",
+						},
+						"claude-3-sonnet-20240229": {
+							MaxTokens:   4096,
+							Temperature: 1.0,
+							Timeout:     60 * time.Second,
+							RetryCount:  3,
+							RetryDelay:  1 * time.Second,
+							Description: "Balanced model for most tasks",
+						},
+					},
 				},
 				"openai": {
-					Model:       "gpt-4",
-					MaxTokens:   4096,
-					Temperature: 1.0,
-					Timeout:     60 * time.Second,
-					RetryCount:  3,
-					RetryDelay:  1 * time.Second,
+					DefaultModel: "gpt-5",
+					Models: map[string]ModelConfig{
+						"gpt-5": {
+							MaxTokens:   128000,
+							Temperature: 0, // Not used - GPT-5 doesn't support temperature
+							Timeout:     180 * time.Second,
+							RetryCount:  3,
+							RetryDelay:  1 * time.Second,
+							Description: "GPT-5: Unified system with smart routing, 272K input, 94.6% AIME",
+						},
+						"gpt-5-mini": {
+							MaxTokens:   128000,
+							Temperature: 0, // Not used - GPT-5 doesn't support temperature
+							Timeout:     120 * time.Second,
+							RetryCount:  3,
+							RetryDelay:  1 * time.Second,
+							Description: "GPT-5 Mini: Fast variant, half the cost of GPT-4o",
+						},
+						"gpt-5-nano": {
+							MaxTokens:   128000,
+							Temperature: 0, // Not used - GPT-5 doesn't support temperature
+							Timeout:     120 * time.Second,
+							RetryCount:  3,
+							RetryDelay:  1 * time.Second,
+							Description: "GPT-5 Nano: Smallest GPT-5 variant",
+						},
+						"gpt-5-chat": {
+							MaxTokens:   128000,
+							Temperature: 0, // Not used - GPT-5 doesn't support temperature
+							Timeout:     120 * time.Second,
+							RetryCount:  3,
+							RetryDelay:  1 * time.Second,
+							Description: "GPT-5 Chat: Optimized for chat applications",
+						},
+						"gpt-4o": {
+							MaxTokens:   4096,
+							Temperature: 1.0,
+							Timeout:     60 * time.Second,
+							RetryCount:  3,
+							RetryDelay:  1 * time.Second,
+							Description: "GPT-4o: Previous generation multimodal flagship",
+						},
+						"gpt-4o-mini": {
+							MaxTokens:   16384,
+							Temperature: 1.0,
+							Timeout:     60 * time.Second,
+							RetryCount:  3,
+							RetryDelay:  1 * time.Second,
+							Description: "GPT-4o Mini: Previous generation small model",
+						},
+						"o1": {
+							MaxTokens:   100000,
+							Temperature: 0, // Not used - o1 doesn't support temperature
+							Timeout:     180 * time.Second,
+							RetryCount:  3,
+							RetryDelay:  1 * time.Second,
+							Description: "o1: Legacy reasoning model",
+						},
+						"o1-preview": {
+							MaxTokens:   32768,
+							Temperature: 0, // Not used - o1 doesn't support temperature
+							Timeout:     120 * time.Second,
+							RetryCount:  3,
+							RetryDelay:  1 * time.Second,
+							Description: "o1 Preview: Legacy reasoning model (preview)",
+						},
+						"o1-mini": {
+							MaxTokens:   65536,
+							Temperature: 0, // Not used - o1 doesn't support temperature
+							Timeout:     120 * time.Second,
+							RetryCount:  3,
+							RetryDelay:  1 * time.Second,
+							Description: "o1 Mini: Legacy reasoning for code/math/science",
+						},
+					},
 				},
 			},
 		},
 		Voice: VoiceConfig{
-			Enabled:  false,
-			Headless: false,
+			InputEnabled:  false,
+			OutputEnabled: true, // Voice output enabled by default when voice is active
+			Headless:      false,
 		},
 		Execution: ExecutionConfig{
 			AutoConfirm:   false,
@@ -203,8 +304,10 @@ func (c *AlfaConfig) UpdateSetting(key, value string) error {
 		c.AI.ConfigFile = value
 
 	// Voice settings
-	case "voice.enabled":
-		c.Voice.Enabled = (value == "true")
+	case "voice.input_enabled":
+		c.Voice.InputEnabled = (value == "true")
+	case "voice.output_enabled":
+		c.Voice.OutputEnabled = (value == "true")
 	case "voice.headless":
 		c.Voice.Headless = (value == "true")
 
@@ -267,8 +370,10 @@ func (c *AlfaConfig) GetSetting(key string) (string, error) {
 		return c.AI.ConfigFile, nil
 
 	// Voice settings
-	case "voice.enabled":
-		return fmt.Sprintf("%t", c.Voice.Enabled), nil
+	case "voice.input_enabled":
+		return fmt.Sprintf("%t", c.Voice.InputEnabled), nil
+	case "voice.output_enabled":
+		return fmt.Sprintf("%t", c.Voice.OutputEnabled), nil
 	case "voice.headless":
 		return fmt.Sprintf("%t", c.Voice.Headless), nil
 
@@ -312,7 +417,8 @@ func (c *AlfaConfig) ListSettings() map[string]string {
 		"workbench.project":        c.Workbench.Project,
 		"ai.provider":              c.AI.Provider,
 		"ai.config_file":           c.AI.ConfigFile,
-		"voice.enabled":            fmt.Sprintf("%t", c.Voice.Enabled),
+		"voice.input_enabled":      fmt.Sprintf("%t", c.Voice.InputEnabled),
+		"voice.output_enabled":     fmt.Sprintf("%t", c.Voice.OutputEnabled),
 		"voice.headless":           fmt.Sprintf("%t", c.Voice.Headless),
 		"execution.auto_confirm":   fmt.Sprintf("%t", c.Execution.AutoConfirm),
 		"execution.max_iterations": fmt.Sprintf("%d", c.Execution.MaxIterations),
@@ -339,7 +445,8 @@ func LoadOrCreate(workbenchPath string) (*AlfaConfig, error) {
 	// Try to load existing config
 	cfg, err := LoadConfig(configPath)
 	if err != nil {
-		if os.IsNotExist(err) {
+		// Check if file doesn't exist using errors.Is for wrapped errors
+		if errors.Is(err, os.ErrNotExist) {
 			// Create default config
 			cfg := DefaultConfig()
 			cfg.Workbench.Path = workbenchPath
@@ -378,11 +485,13 @@ func (c *AlfaConfig) ApplyCLIOverrides(flags CLIFlags) {
 
 	// Voice overrides
 	if flags.Voice {
-		c.Voice.Enabled = true
+		c.Voice.InputEnabled = true
+		c.Voice.OutputEnabled = true
 	}
 	if flags.Headless {
 		c.Voice.Headless = true
-		c.Voice.Enabled = true
+		c.Voice.InputEnabled = true
+		c.Voice.OutputEnabled = true
 		c.Execution.AutoConfirm = true
 	}
 
@@ -443,122 +552,74 @@ type CLIFlags struct {
 	AllowSelfModify bool
 }
 
-// MarshalYAML implements custom YAML marshaling to handle time.Duration
-func (c *AlfaConfig) MarshalYAML() (interface{}, error) {
-	type Alias AlfaConfig
-
-	// Convert to intermediate structure with duration as strings
-	type DurationConfig struct {
-		Model       string `yaml:"model"`
-		MaxTokens   int    `yaml:"max_tokens"`
-		Temperature float64 `yaml:"temperature"`
-		Timeout     string `yaml:"timeout"`
-		RetryCount  int    `yaml:"retry_count"`
-		RetryDelay  string `yaml:"retry_delay"`
+// GetActiveModelConfig returns the configuration for the currently selected model
+func (c *AlfaConfig) GetActiveModelConfig() (ModelConfig, string, error) {
+	providerCfg, ok := c.AI.Providers[c.AI.Provider]
+	if !ok {
+		return ModelConfig{}, "", fmt.Errorf("provider not found: %s", c.AI.Provider)
 	}
 
-	providers := make(map[string]DurationConfig)
-	for name, p := range c.AI.Providers {
-		providers[name] = DurationConfig{
-			Model:       p.Model,
-			MaxTokens:   p.MaxTokens,
-			Temperature: p.Temperature,
-			Timeout:     p.Timeout.String(),
-			RetryCount:  p.RetryCount,
-			RetryDelay:  p.RetryDelay.String(),
-		}
+	// Determine which model to use
+	modelName := c.AI.SelectedModel
+	if modelName == "" {
+		modelName = providerCfg.DefaultModel
 	}
 
-	return &struct {
-		Workbench  WorkbenchConfig `yaml:"workbench"`
-		AI         struct {
-			Provider   string                    `yaml:"provider"`
-			ConfigFile string                    `yaml:"config_file"`
-			Providers  map[string]DurationConfig `yaml:"providers"`
-		} `yaml:"ai"`
-		Voice      VoiceConfig      `yaml:"voice"`
-		Execution  ExecutionConfig  `yaml:"execution"`
-		Sandbox    SandboxConfig    `yaml:"sandbox"`
-		Cellorg    CellorgConfig    `yaml:"cellorg"`
-		Output     OutputConfig     `yaml:"output"`
-		SelfModify SelfModifyConfig `yaml:"self_modify"`
-	}{
-		Workbench: c.Workbench,
-		AI: struct {
-			Provider   string                    `yaml:"provider"`
-			ConfigFile string                    `yaml:"config_file"`
-			Providers  map[string]DurationConfig `yaml:"providers"`
-		}{
-			Provider:   c.AI.Provider,
-			ConfigFile: c.AI.ConfigFile,
-			Providers:  providers,
-		},
-		Voice:      c.Voice,
-		Execution:  c.Execution,
-		Sandbox:    c.Sandbox,
-		Cellorg:    c.Cellorg,
-		Output:     c.Output,
-		SelfModify: c.SelfModify,
-	}, nil
+	modelCfg, ok := providerCfg.Models[modelName]
+	if !ok {
+		return ModelConfig{}, "", fmt.Errorf("model not found: %s for provider %s", modelName, c.AI.Provider)
+	}
+
+	return modelCfg, modelName, nil
 }
 
-// UnmarshalYAML implements custom YAML unmarshaling to handle time.Duration
-func (c *AlfaConfig) UnmarshalYAML(node *yaml.Node) error {
-	type Alias AlfaConfig
+// MarshalYAML implements custom YAML marshaling for ModelConfig to handle time.Duration
+func (m ModelConfig) MarshalYAML() (interface{}, error) {
+	result := map[string]interface{}{
+		"max_tokens":  m.MaxTokens,
+		"temperature": m.Temperature,
+		"timeout":     m.Timeout.String(),
+		"retry_count": m.RetryCount,
+		"retry_delay": m.RetryDelay.String(),
+	}
+	if m.Description != "" {
+		result["description"] = m.Description
+	}
+	return result, nil
+}
 
-	type DurationConfig struct {
-		Model       string `yaml:"model"`
-		MaxTokens   int    `yaml:"max_tokens"`
+// UnmarshalYAML implements custom YAML unmarshaling for ModelConfig to handle time.Duration
+func (m *ModelConfig) UnmarshalYAML(node *yaml.Node) error {
+	type rawModel struct {
+		MaxTokens   int     `yaml:"max_tokens"`
 		Temperature float64 `yaml:"temperature"`
-		Timeout     string `yaml:"timeout"`
-		RetryCount  int    `yaml:"retry_count"`
-		RetryDelay  string `yaml:"retry_delay"`
+		Timeout     string  `yaml:"timeout"`
+		RetryCount  int     `yaml:"retry_count"`
+		RetryDelay  string  `yaml:"retry_delay"`
+		Description string  `yaml:"description"`
 	}
 
-	aux := &struct {
-		Workbench  WorkbenchConfig `yaml:"workbench"`
-		AI         struct {
-			Provider   string                    `yaml:"provider"`
-			ConfigFile string                    `yaml:"config_file"`
-			Providers  map[string]DurationConfig `yaml:"providers"`
-		} `yaml:"ai"`
-		Voice      VoiceConfig      `yaml:"voice"`
-		Execution  ExecutionConfig  `yaml:"execution"`
-		Sandbox    SandboxConfig    `yaml:"sandbox"`
-		Cellorg    CellorgConfig    `yaml:"cellorg"`
-		Output     OutputConfig     `yaml:"output"`
-		SelfModify SelfModifyConfig `yaml:"self_modify"`
-	}{}
-
-	if err := node.Decode(aux); err != nil {
+	var raw rawModel
+	if err := node.Decode(&raw); err != nil {
 		return err
 	}
 
-	c.Workbench = aux.Workbench
-	c.AI.Provider = aux.AI.Provider
-	c.AI.ConfigFile = aux.AI.ConfigFile
-	c.Voice = aux.Voice
-	c.Execution = aux.Execution
-	c.Sandbox = aux.Sandbox
-	c.Cellorg = aux.Cellorg
-	c.Output = aux.Output
-	c.SelfModify = aux.SelfModify
-
-	// Convert duration strings to time.Duration
-	c.AI.Providers = make(map[string]ProviderConfig)
-	for name, p := range aux.AI.Providers {
-		timeout, _ := time.ParseDuration(p.Timeout)
-		retryDelay, _ := time.ParseDuration(p.RetryDelay)
-
-		c.AI.Providers[name] = ProviderConfig{
-			Model:       p.Model,
-			MaxTokens:   p.MaxTokens,
-			Temperature: p.Temperature,
-			Timeout:     timeout,
-			RetryCount:  p.RetryCount,
-			RetryDelay:  retryDelay,
-		}
+	timeout, err := time.ParseDuration(raw.Timeout)
+	if err != nil {
+		timeout = 60 * time.Second // Default on parse error
 	}
+
+	retryDelay, err := time.ParseDuration(raw.RetryDelay)
+	if err != nil {
+		retryDelay = 1 * time.Second // Default on parse error
+	}
+
+	m.MaxTokens = raw.MaxTokens
+	m.Temperature = raw.Temperature
+	m.Timeout = timeout
+	m.RetryCount = raw.RetryCount
+	m.RetryDelay = retryDelay
+	m.Description = raw.Description
 
 	return nil
 }

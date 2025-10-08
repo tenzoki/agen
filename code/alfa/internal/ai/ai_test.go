@@ -177,8 +177,8 @@ func TestClaudeClientDefaults(t *testing.T) {
 func TestOpenAIClientDefaults(t *testing.T) {
 	client := ai.NewOpenAIClient(ai.Config{})
 
-	if client.Model() != "gpt-4" {
-		t.Errorf("Expected default model 'gpt-4', got '%s'", client.Model())
+	if client.Model() != "gpt-5" {
+		t.Errorf("Expected default model 'gpt-5', got '%s'", client.Model())
 	}
 
 	if client.Provider() != "openai" {

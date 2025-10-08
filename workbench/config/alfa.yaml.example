@@ -10,26 +10,75 @@ workbench:
 # AI provider configuration
 ai:
   provider: anthropic              # Default provider: "anthropic" or "openai"
+  selected_model: claude-sonnet-4-5-20250929  # Default model to use
   config_file: ""                  # Path to ai-config.json (empty = workbench/config/ai-config.json)
   providers:
     anthropic:
-      model: claude-3-5-sonnet-20241022
-      max_tokens: 4096
-      temperature: 1.0
-      timeout: 1m0s
-      retry_count: 3
-      retry_delay: 1s
+      default_model: claude-sonnet-4-5-20250929
+      models:
+        # Claude 4.x series (2025) - Latest models
+        claude-sonnet-4-5-20250929:
+          description: "Claude Sonnet 4.5: Most intelligent model, best for coding and complex agents"
+          max_tokens: 64000
+          temperature: 1.0
+          timeout: 3m0s
+          retry_count: 3
+          retry_delay: 1s
+        claude-opus-4-1-20250805:
+          description: "Claude Opus 4.1: Latest Opus upgrade, powerful reasoning"
+          max_tokens: 32000
+          temperature: 1.0
+          timeout: 3m0s
+          retry_count: 3
+          retry_delay: 1s
+        claude-sonnet-4-20250514:
+          description: "Claude Sonnet 4: Hybrid model with instant and extended thinking"
+          max_tokens: 64000
+          temperature: 1.0
+          timeout: 3m0s
+          retry_count: 3
+          retry_delay: 1s
+        # Claude 3.5 series (2024)
+        claude-3-5-haiku-20241022:
+          description: "Claude Haiku 3.5: Fast and cost-effective"
+          max_tokens: 8192
+          temperature: 1.0
+          timeout: 1m0s
+          retry_count: 3
+          retry_delay: 1s
+        claude-3-5-sonnet-20241022:
+          description: "Claude Sonnet 3.5: Legacy model"
+          max_tokens: 8192
+          temperature: 1.0
+          timeout: 1m0s
+          retry_count: 3
+          retry_delay: 1s
     openai:
-      model: gpt-4
-      max_tokens: 4096
-      temperature: 1.0
-      timeout: 1m0s
-      retry_count: 3
-      retry_delay: 1s
+      default_model: gpt-5
+      models:
+        gpt-5:
+          description: "GPT-5: Unified system with smart routing, 272K input"
+          max_tokens: 128000
+          timeout: 3m0s
+          retry_count: 3
+          retry_delay: 1s
+        gpt-5-mini:
+          description: "GPT-5 Mini: Fast variant, half the cost"
+          max_tokens: 128000
+          timeout: 2m0s
+          retry_count: 3
+          retry_delay: 1s
+        gpt-4o:
+          description: "GPT-4o: Previous generation multimodal"
+          max_tokens: 16384
+          timeout: 1m0s
+          retry_count: 3
+          retry_delay: 1s
 
 # Voice input/output configuration
 voice:
-  enabled: false                   # Enable voice mode (requires OPENAI_API_KEY and sox)
+  input_enabled: false             # Enable voice input/STT (requires OPENAI_API_KEY and sox)
+  output_enabled: true             # Enable voice output/TTS (requires OPENAI_API_KEY and sox/afplay)
   headless: false                  # Headless mode (voice + auto-confirm)
 
 # Execution behavior

@@ -21,16 +21,16 @@ type OpenAIClient struct {
 // NewOpenAIClient creates a new OpenAI API client
 func NewOpenAIClient(config Config) *OpenAIClient {
 	if config.Model == "" {
-		config.Model = "gpt-4"
+		config.Model = "gpt-5"
 	}
 	if config.MaxTokens == 0 {
-		config.MaxTokens = 4096
+		config.MaxTokens = 128000
 	}
 	if config.Temperature == 0 {
 		config.Temperature = 1.0
 	}
 	if config.Timeout == 0 {
-		config.Timeout = 60 * time.Second
+		config.Timeout = 180 * time.Second
 	}
 	if config.RetryCount == 0 {
 		config.RetryCount = 3
@@ -55,11 +55,12 @@ type openaiMessage struct {
 
 // openaiRequest represents the request payload for OpenAI API
 type openaiRequest struct {
-	Model       string          `json:"model"`
-	Messages    []openaiMessage `json:"messages"`
-	MaxTokens   int             `json:"max_tokens,omitempty"`
-	Temperature float64         `json:"temperature,omitempty"`
-	Stream      bool            `json:"stream,omitempty"`
+	Model                string          `json:"model"`
+	Messages             []openaiMessage `json:"messages"`
+	MaxTokens            int             `json:"max_tokens,omitempty"`
+	MaxCompletionTokens  int             `json:"max_completion_tokens,omitempty"`
+	Temperature          float64         `json:"temperature,omitempty"`
+	Stream               bool            `json:"stream,omitempty"`
 }
 
 // openaiResponse represents the response from OpenAI API
@@ -105,12 +106,22 @@ func (o *OpenAIClient) Chat(ctx context.Context, messages []Message) (*Response,
 		})
 	}
 
+	// Check if this is a reasoning model (o3-mini, o1-mini, o1-preview, o1)
+	isReasoningModel := isReasoningModel(o.config.Model)
+
 	reqBody := openaiRequest{
-		Model:       o.config.Model,
-		Messages:    apiMessages,
-		MaxTokens:   o.config.MaxTokens,
-		Temperature: o.config.Temperature,
-		Stream:      false,
+		Model:    o.config.Model,
+		Messages: apiMessages,
+		Stream:   false,
+	}
+
+	// Reasoning models use max_completion_tokens instead of max_tokens
+	if isReasoningModel {
+		reqBody.MaxCompletionTokens = o.config.MaxTokens
+		// Reasoning models don't support temperature parameter
+	} else {
+		reqBody.MaxTokens = o.config.MaxTokens
+		reqBody.Temperature = o.config.Temperature
 	}
 
 	var resp *Response
@@ -268,4 +279,16 @@ func (o *OpenAIClient) Model() string {
 // Provider returns the provider name
 func (o *OpenAIClient) Provider() string {
 	return "openai"
+}
+
+// isReasoningModel checks if the model is a reasoning model (GPT-5, o1 series)
+// Reasoning models use max_completion_tokens instead of max_tokens and don't support temperature
+func isReasoningModel(model string) bool {
+	reasoningModels := []string{"gpt-5", "gpt-5-mini", "gpt-5-nano", "gpt-5-chat", "o1", "o1-mini", "o1-preview"}
+	for _, rm := range reasoningModels {
+		if model == rm {
+			return true
+		}
+	}
+	return false
 }

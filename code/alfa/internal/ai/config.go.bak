@@ -2,6 +2,7 @@ package ai
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -31,7 +32,7 @@ func DefaultConfig() ConfigFile {
 				Model:       "gpt-5",
 				MaxTokens:   128000,
 				Temperature: 1.0,
-				Timeout:     180 * time.Second,
+				Timeout:     60 * time.Second,
 				RetryCount:  3,
 				RetryDelay:  1 * time.Second,
 			},
@@ -119,8 +120,13 @@ func LoadConfig(path string) (*ConfigFile, error) {
 func LoadConfigWithEnv(path string) (*ConfigFile, error) {
 	cfg, err := LoadConfig(path)
 	if err != nil {
-		// Return error so caller can use alfa.yaml as fallback
-		return nil, err
+		// If file doesn't exist, start with defaults
+		if errors.Is(err, os.ErrNotExist) {
+			defaultCfg := DefaultConfig()
+			cfg = &defaultCfg
+		} else {
+			return nil, err
+		}
 	}
 
 	// Override API keys from environment

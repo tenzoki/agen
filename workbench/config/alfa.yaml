@@ -1,32 +1,151 @@
-# Alfa Config
-
-app_name: "alfa"
-debug: true
-
-capture_output: true
-enable_cellorg: true
-max_iterations: 10
-max_output: 10
-auto-confirm: true
-sandbox: false
-sandbox_image: "golang:1.24-alpine"
-voice: false
-
-# For sending stop | pause | resume to all agents (broadcast)
-support:
-  port: ":9000"
-  #always "tcp"
-  debug: true
-
-broker:
-  port: ":9001"
-  protocol: "tcp" # tcp | uds
-  codec: "json"
-  debug: true
-
-# Pool
-pool:
-  - "pool.yaml"
-
-await-timeout_seconds: 300
-await_support_reboot_seconds: 300
+workbench:
+    path: /Users/kai/Dropbox/qboot/projects/E10-agen/agen/workbench
+    project: ""
+ai:
+    provider: openai
+    selected_model: gpt-5
+    config_file: ""
+    providers:
+        anthropic:
+            default_model: claude-sonnet-4-5-20250929
+            models:
+                claude-3-5-haiku-20241022:
+                    description: 'Claude Haiku 3.5: Fast and cost-effective model (2024)'
+                    max_tokens: 8192
+                    retry_count: 3
+                    retry_delay: 1s
+                    temperature: 1
+                    timeout: 1m0s
+                claude-3-5-sonnet-20241022:
+                    description: 'Claude Sonnet 3.5: Legacy model (2024)'
+                    max_tokens: 8192
+                    retry_count: 3
+                    retry_delay: 1s
+                    temperature: 1
+                    timeout: 1m0s
+                claude-3-haiku-20240307:
+                    description: 'Claude Haiku 3: Legacy fast model (2024)'
+                    max_tokens: 4096
+                    retry_count: 3
+                    retry_delay: 1s
+                    temperature: 1
+                    timeout: 1m0s
+                claude-3-opus-20240229:
+                    description: 'Claude Opus 3: Legacy model (2024)'
+                    max_tokens: 4096
+                    retry_count: 3
+                    retry_delay: 1s
+                    temperature: 1
+                    timeout: 1m0s
+                claude-3-sonnet-20240229:
+                    description: 'Claude Sonnet 3: Legacy model (2024)'
+                    max_tokens: 4096
+                    retry_count: 3
+                    retry_delay: 1s
+                    temperature: 1
+                    timeout: 1m0s
+                claude-opus-4-1-20250805:
+                    description: 'Claude Opus 4.1: Latest Opus upgrade, powerful reasoning (2025)'
+                    max_tokens: 32000
+                    retry_count: 3
+                    retry_delay: 1s
+                    temperature: 1
+                    timeout: 3m0s
+                claude-sonnet-4-5-20250929:
+                    description: 'Claude Sonnet 4.5: Most intelligent model, best for coding and complex agents (2025)'
+                    max_tokens: 64000
+                    retry_count: 3
+                    retry_delay: 1s
+                    temperature: 1
+                    timeout: 3m0s
+                claude-sonnet-4-20250514:
+                    description: 'Claude Sonnet 4: Hybrid model with instant and extended thinking (2025)'
+                    max_tokens: 64000
+                    retry_count: 3
+                    retry_delay: 1s
+                    temperature: 1
+                    timeout: 3m0s
+        openai:
+            default_model: gpt-5
+            models:
+                gpt-4o:
+                    description: 'GPT-4o: Previous generation multimodal flagship'
+                    max_tokens: 4096
+                    retry_count: 3
+                    retry_delay: 1s
+                    temperature: 1
+                    timeout: 1m0s
+                gpt-4o-mini:
+                    description: 'GPT-4o Mini: Previous generation small model'
+                    max_tokens: 16384
+                    retry_count: 3
+                    retry_delay: 1s
+                    temperature: 1
+                    timeout: 1m0s
+                gpt-5:
+                    description: 'GPT-5: Unified system with smart routing, 272K input, 94.6% AIME'
+                    max_tokens: 128000
+                    retry_count: 3
+                    retry_delay: 1s
+                    temperature: 0
+                    timeout: 3m0s
+                gpt-5-chat:
+                    description: 'GPT-5 Chat: Optimized for chat applications'
+                    max_tokens: 128000
+                    retry_count: 3
+                    retry_delay: 1s
+                    temperature: 0
+                    timeout: 2m0s
+                gpt-5-mini:
+                    description: 'GPT-5 Mini: Fast variant, half the cost of GPT-4o'
+                    max_tokens: 128000
+                    retry_count: 3
+                    retry_delay: 1s
+                    temperature: 0
+                    timeout: 2m0s
+                gpt-5-nano:
+                    description: 'GPT-5 Nano: Smallest GPT-5 variant'
+                    max_tokens: 128000
+                    retry_count: 3
+                    retry_delay: 1s
+                    temperature: 0
+                    timeout: 2m0s
+                o1:
+                    description: 'o1: Legacy reasoning model'
+                    max_tokens: 100000
+                    retry_count: 3
+                    retry_delay: 1s
+                    temperature: 0
+                    timeout: 3m0s
+                o1-mini:
+                    description: 'o1 Mini: Legacy reasoning for code/math/science'
+                    max_tokens: 65536
+                    retry_count: 3
+                    retry_delay: 1s
+                    temperature: 0
+                    timeout: 2m0s
+                o1-preview:
+                    description: 'o1 Preview: Legacy reasoning model (preview)'
+                    max_tokens: 32768
+                    retry_count: 3
+                    retry_delay: 1s
+                    temperature: 0
+                    timeout: 2m0s
+voice:
+    input_enabled: true
+    output_enabled: false
+    headless: false
+execution:
+    auto_confirm: true
+    max_iterations: 10
+sandbox:
+    enabled: false
+    image: golang:1.24-alpine
+cellorg:
+    enabled: false
+    config_path: config
+output:
+    capture_enabled: true
+    max_size_kb: 10
+self_modify:
+    allowed: true

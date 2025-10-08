@@ -127,8 +127,9 @@ User: "Increase max output size to 50KB"
 - `ai.config_file` - Path to ai-config.json *[requires restart]*
 
 ### Voice
-- `voice.enabled` - Enable voice input/output (true/false)
-- `voice.headless` - Headless mode (true/false)
+- `voice.input_enabled` - Enable voice input/STT (true/false) **[immediate]**
+- `voice.output_enabled` - Enable voice output/TTS (true/false) **[immediate]**
+- `voice.headless` - Headless mode (true/false) *[requires restart]*
 
 ### Execution
 - `execution.auto_confirm` - Auto-confirm operations (true/false)
@@ -153,6 +154,8 @@ User: "Increase max output size to 50KB"
 
 ### Immediate Effect ⚡
 These settings apply immediately without restart:
+- `voice.input_enabled`
+- `voice.output_enabled`
 - `output.capture_enabled`
 - `output.max_size_kb`
 
@@ -167,6 +170,7 @@ These settings require restarting alfa to take effect:
 - `ai.provider`
 - `ai.config_file`
 - `workbench.path`
+- `voice.headless`
 - `sandbox.enabled`
 - `sandbox.image`
 - `cellorg.enabled`

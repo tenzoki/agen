@@ -8,11 +8,13 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/tenzoki/agen/alfa/internal/ai"
 	"github.com/tenzoki/agen/alfa/internal/audio"
 	alfacontext "github.com/tenzoki/agen/alfa/internal/context"
+	"github.com/tenzoki/agen/alfa/internal/keyboard"
 	"github.com/tenzoki/agen/alfa/internal/knowledge"
 	"github.com/tenzoki/agen/alfa/internal/project"
 	"github.com/tenzoki/agen/alfa/internal/speech"
@@ -40,6 +42,7 @@ type Orchestrator struct {
 	projectVFS     *vfs.VFS
 	projectManager *project.Manager
 	workbenchRoot  string
+	frameworkRoot  string
 	cellManager    *cellorchestrator.EmbeddedOrchestrator
 
 	stt      speech.STT
@@ -64,6 +67,7 @@ type Config struct {
 	ProjectVFS      *vfs.VFS
 	ProjectManager  *project.Manager
 	WorkbenchRoot   string
+	FrameworkRoot   string
 	CellManager     *cellorchestrator.EmbeddedOrchestrator
 	STT             speech.STT
 	TTS             speech.TTS
@@ -80,6 +84,12 @@ func New(cfg Config) *Orchestrator {
 		cfg.MaxIterations = 10
 	}
 
+	// Calculate framework root if not provided (workbench parent directory)
+	frameworkRoot := cfg.FrameworkRoot
+	if frameworkRoot == "" && cfg.WorkbenchRoot != "" {
+		frameworkRoot = filepath.Dir(cfg.WorkbenchRoot)
+	}
+
 	return &Orchestrator{
 		llm:             cfg.LLM,
 		contextMgr:      cfg.ContextManager,
@@ -88,6 +98,7 @@ func New(cfg Config) *Orchestrator {
 		projectVFS:      cfg.ProjectVFS,
 		projectManager:  cfg.ProjectManager,
 		workbenchRoot:   cfg.WorkbenchRoot,
+		frameworkRoot:   frameworkRoot,
 		cellManager:     cfg.CellManager,
 		stt:             cfg.STT,
 		tts:             cfg.TTS,
@@ -152,7 +163,15 @@ func (o *Orchestrator) processRequest(ctx context.Context, userInput string, sys
 
 		messages := o.buildMessages(systemPrompt)
 
+		// Show thinking indicator
+		thinking := NewThinkingIndicator()
+		thinking.Start()
+
 		response, err := o.llm.Chat(ctx, messages)
+
+		// Stop thinking indicator
+		thinking.Stop()
+
 		if err != nil {
 			return fmt.Errorf("AI error: %w", err)
 		}
@@ -181,7 +200,7 @@ func (o *Orchestrator) processRequest(ctx context.Context, userInput string, sys
 				o.vcr.Commit(commitMsg)
 			}
 
-			o.respond(ctx, o.formatResults(results))
+			o.respondWithResults(ctx, results)
 			return nil
 		}
 
@@ -248,19 +267,91 @@ func (o *Orchestrator) respond(ctx context.Context, message string) {
 	fmt.Println(message)
 
 	if o.tts != nil && o.player != nil && message != "" {
-		go func() {
-			audioPath := filepath.Join(o.projectVFS.Root(), "output", "response.mp3")
-			os.MkdirAll(filepath.Dir(audioPath), 0755)
-
-			err := o.tts.SynthesizeToFile(ctx, message, audioPath)
-			if err != nil {
-				return
-			}
-
-			// Play audio
-			o.player.PlayAsync(audioPath)
-		}()
+		o.speakWithInterrupt(ctx, message)
 	}
+}
+
+// respondWithResults sends formatted results to user with intelligent voice output
+func (o *Orchestrator) respondWithResults(ctx context.Context, results []tools.Result) {
+	displayMessage := o.formatResults(results)
+	fmt.Println(displayMessage)
+
+	// For voice, prefer command output over success messages
+	voiceMessage := o.extractVoiceContent(results)
+
+	if o.tts != nil && o.player != nil && voiceMessage != "" {
+		o.speakWithInterrupt(ctx, voiceMessage)
+	}
+}
+
+// extractVoiceContent extracts the most relevant content for voice output
+func (o *Orchestrator) extractVoiceContent(results []tools.Result) string {
+	// Check if there's command output to speak
+	for _, r := range results {
+		if r.Success && r.Action.Type == "run_command" {
+			if output, ok := r.Output.(string); ok && output != "" {
+				// Clean up the output for voice (remove excessive whitespace)
+				output = strings.TrimSpace(output)
+				if output != "" {
+					return output
+				}
+			}
+		}
+	}
+
+	// Fallback to formatted results
+	return o.formatResults(results)
+}
+
+// speakWithInterrupt speaks text with ESC key interrupt support
+func (o *Orchestrator) speakWithInterrupt(ctx context.Context, text string) {
+	audioPath := filepath.Join(o.projectVFS.Root(), "output", "response.mp3")
+	os.MkdirAll(filepath.Dir(audioPath), 0755)
+
+	// Generate audio file
+	err := o.tts.SynthesizeToFile(ctx, text, audioPath)
+	if err != nil {
+		return
+	}
+
+	// Setup keyboard listener for ESC
+	listener := keyboard.NewListener()
+	var wg sync.WaitGroup
+	stopped := false
+	var mu sync.Mutex
+
+	listener.OnEscape(func() {
+		mu.Lock()
+		defer mu.Unlock()
+		if !stopped {
+			stopped = true
+			o.player.Stop()
+			fmt.Println("\r[Voice stopped]                    ")
+		}
+	})
+
+	// Start listener
+	if err := listener.Start(); err == nil {
+		defer listener.Stop()
+		fmt.Print("[Press ESC to stop] ")
+	}
+
+	// Play audio in background (blocking call in goroutine)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		o.player.Play(audioPath) // Use blocking Play() so we can interrupt it
+	}()
+
+	// Wait for playback to complete
+	wg.Wait()
+
+	// Clean up display
+	mu.Lock()
+	if !stopped {
+		fmt.Print("\r                    \r")
+	}
+	mu.Unlock()
 }
 
 // Action represents an action to execute
@@ -316,7 +407,10 @@ func (o *Orchestrator) executeActions(ctx context.Context, actions []Action) ([]
 	var results []tools.Result
 
 	for _, action := range actions {
-		if o.mode == ModeConfirm {
+		// Check current auto-confirm setting (may have changed at runtime)
+		autoConfirm := o.toolDispatcher.IsAutoConfirmEnabled()
+
+		if !autoConfirm && o.mode == ModeConfirm {
 			if !o.confirmAction(action) {
 				results = append(results, tools.Result{
 					Action: tools.Action{
@@ -346,7 +440,7 @@ func (o *Orchestrator) executeAction(ctx context.Context, action Action) tools.R
 	switch action.Type {
 	case "patch":
 		return o.executePatch(action)
-	case "read_file", "write_file", "run_command", "run_tests", "search", "list_projects", "create_project", "delete_project", "restore_project", "switch_project":
+	case "read_file", "write_file", "run_command", "run_tests", "search", "list_projects", "create_project", "delete_project", "restore_project", "switch_project", "config_list", "config_get", "config_set":
 		result := o.toolDispatcher.Execute(ctx, tools.Action{
 			Type:   action.Type,
 			Params: action.Params,
@@ -443,7 +537,7 @@ func (o *Orchestrator) executePatch(action Action) tools.Result {
 
 // confirmAction asks user to confirm an action
 func (o *Orchestrator) confirmAction(action Action) bool {
-	fmt.Printf("\n⚠️  AI wants to: %s\n", action.Type)
+	fmt.Printf("\n⚠️  Alfa wants to: %s\n", action.Type)
 	fmt.Printf("Details: %+v\n", action.Params)
 	fmt.Print("Proceed? [Y/n]: ")
 
@@ -526,6 +620,13 @@ func (o *Orchestrator) buildSystemPrompt() string {
 
 	capabilities := `You are an AI coding assistant with access to tools and the ability to modify code.
 
+RESPONSE STYLE:
+- Be CONCISE and DIRECT - avoid unnecessary explanations
+- For simple operations (config changes, file reads, commands): minimal explanation, just do it
+- For complex changes (code modifications, refactoring): brief explanation of approach
+- Let the tool execution results speak for themselves
+- Only elaborate when explicitly asked or when complexity requires it
+
 CAPABILITIES:
 1. Read and analyze code files
 2. Apply patches to fix bugs or add features
@@ -533,21 +634,59 @@ CAPABILITIES:
 4. Search through the codebase
 5. Generate git commits for changes`
 
-	if cellorgAvailable {
-		capabilities += `
-6. Start and manage cells for advanced workflows
-7. Query RAG systems for semantic code search
-8. Coordinate multi-agent processing pipelines
-9. Extract named entities from text (NER) in 100+ languages
-10. Anonymize sensitive data with reversible pseudonyms (GDPR compliance)`
+	capNum := 6
+	if o.allowSelfModify {
+		capabilities += fmt.Sprintf(`
+%d. **SELF-MODIFICATION**: Modify the framework's own codebase (code/ directory)`, capNum)
+		capNum++
 	}
 
-	return capabilities + `
+	if cellorgAvailable {
+		capabilities += fmt.Sprintf(`
+%d. Start and manage cells for advanced workflows
+%d. Query RAG systems for semantic code search
+%d. Coordinate multi-agent processing pipelines
+%d. Extract named entities from text (NER) in 100+ languages
+%d. Anonymize sensitive data with reversible pseudonyms (GDPR compliance)`, capNum, capNum+1, capNum+2, capNum+3, capNum+4)
+	}
+
+	contextInfo := ""
+	if o.allowSelfModify {
+		projectPath := o.projectVFS.Root()
+		projectName := filepath.Base(projectPath)
+		contextInfo = fmt.Sprintf(`
+
+═══════════════════════════════════════════════════
+WORKING CONTEXTS - READ THIS CAREFULLY
+═══════════════════════════════════════════════════
+
+You operate in TWO distinct contexts:
+
+1. PROJECT: %s (current user project)
+2. FRAMEWORK: %s (your own codebase)
+
+CRITICAL: "my/the project" → PROJECT | "your/alfa/framework code" → FRAMEWORK
+
+FRAMEWORK OPS - Use absolute paths + cd to framework root:
+` + "```json" + `
+{"action": "run_command", "command": "cd %s && go test ./code/alfa/..."}
+` + "```" + `
+
+═══════════════════════════════════════════════════
+`, projectName, o.frameworkRoot, o.frameworkRoot)
+	}
+
+	return capabilities + contextInfo + `
 
 RESPONSE FORMAT:
-Always structure your responses as:
-1. Natural language explanation of what you'll do
+Structure your responses as:
+1. Brief statement of what you're doing (1 line for simple ops, 2-3 lines for complex)
 2. JSON action blocks wrapped in ` + "```json ... ```" + ` for operations
+3. No verbose explanations unless complexity requires it
+
+Examples:
+Simple operation: "Enabling auto-confirm mode."
+Complex operation: "I'll refactor the authentication logic to use middleware. This will make the code more maintainable and easier to test."
 
 AVAILABLE ACTIONS:
 
@@ -564,7 +703,12 @@ Project Management:
 - create_project: Create a new project
 - delete_project: Delete a project (backup kept for recovery)
 - restore_project: Restore a deleted project from backup
-- switch_project: Request to switch to another project` +
+- switch_project: Request to switch to another project
+
+Configuration Management:
+- config_list: List all current configuration settings
+- config_get: Get a specific configuration setting
+- config_set: Update a configuration setting (saved to alfa.yaml)` +
 	func() string {
 		if cellorgAvailable {
 			return `
@@ -652,6 +796,44 @@ PROJECT MANAGEMENT FORMATS:
 (Note: Project switching happens in real-time - no restart needed)
 
 IMPORTANT: After creating or switching projects, all subsequent operations will work on the new project automatically.
+
+CONFIGURATION MANAGEMENT FORMATS:
+
+List all configuration settings:
+` + "```json" + `
+{
+  "action": "config_list"
+}
+` + "```" + `
+
+Get a specific setting:
+` + "```json" + `
+{
+  "action": "config_get",
+  "key": "execution.max_iterations"
+}
+` + "```" + `
+
+Update a setting (saved to alfa.yaml):
+` + "```json" + `
+{
+  "action": "config_set",
+  "key": "execution.auto_confirm",
+  "value": "true"
+}
+` + "```" + `
+
+Available configuration keys:
+- workbench.path, workbench.project
+- ai.provider (anthropic/openai), ai.config_file
+- voice.input_enabled (true/false), voice.output_enabled (true/false), voice.headless (true/false)
+- execution.auto_confirm (true/false), execution.max_iterations (number)
+- sandbox.enabled (true/false), sandbox.image (string)
+- cellorg.enabled (true/false), cellorg.config_path (string)
+- output.capture_enabled (true/false), output.max_size_kb (number)
+- self_modify.allowed (true/false)
+
+(Note: Some settings require restart, others apply immediately. The AI will indicate which.)
 ` + "```" + func() string {
 		if cellorgAvailable {
 			return `
@@ -725,10 +907,19 @@ Example workflow with cells:
 FRAMEWORK MODIFICATION RESTRICTIONS
 ═══════════════════════════════════════════════════
 
-IMPORTANT: You are NOT allowed to modify framework code (code/ directory).
+IMPORTANT: You are CURRENTLY NOT allowed to modify framework code (code/ directory).
 - You can read framework code for understanding
 - You can work on user projects (workbench/projects/)
-- Framework modifications require --allow-self-modify flag
+- Framework code modifications are disabled
+
+HOW TO ENABLE SELF-MODIFICATION:
+If the user asks about modifying the framework or your own code, inform them:
+"I'm currently not allowed to modify the framework code (code/ directory).
+To enable self-modification, you can:
+1. Set the config: self_modify.allowed = true
+2. Or restart alfa with --allow-self-modify flag
+
+Would you like me to enable self-modification now?"
 
 ═══════════════════════════════════════════════════
 
@@ -739,12 +930,38 @@ IMPORTANT: You are NOT allowed to modify framework code (code/ directory).
 		content, err := os.ReadFile(coreRulesPath)
 		if err != nil {
 			// Core rules not found - not critical, continue without them
-			return ""
+			return `
+═══════════════════════════════════════════════════
+SELF-MODIFICATION ENABLED
+═══════════════════════════════════════════════════
+
+You ARE ALLOWED to modify the framework code (code/ directory).
+This includes:
+- Alfa's own codebase (code/alfa/)
+- Cellorg orchestrator (code/cellorg/)
+- Atomic libraries (code/atomic/)
+- Omni storage (code/omni/)
+- Agents (code/agents/)
+
+IMPORTANT: Exercise caution and follow best practices.
+If core rules are missing, ask the user before making significant changes.
+
+═══════════════════════════════════════════════════
+
+`
 		}
 		return `
 ═══════════════════════════════════════════════════
-FRAMEWORK MODIFICATION RULES
+SELF-MODIFICATION ENABLED - FRAMEWORK MODIFICATION RULES
 ═══════════════════════════════════════════════════
+
+You ARE ALLOWED to modify the framework code (code/ directory).
+This includes:
+- Alfa's own codebase (code/alfa/)
+- Cellorg orchestrator (code/cellorg/)
+- Atomic libraries (code/atomic/)
+- Omni storage (code/omni/)
+- Agents (code/agents/)
 
 ` + string(content) + `
 

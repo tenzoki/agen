@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -52,10 +53,14 @@ func main() {
 	// Determine workbench directory (CLI has priority)
 	workbenchDir := determineWorkbenchPath(*workbench)
 
-	// Load or create alfa.yaml configuration
+	// Load or create alfa.yaml configuration (non-fatal, use defaults on error)
 	cfg, err := alfaconfig.LoadOrCreate(workbenchDir)
 	if err != nil {
-		fatal("Failed to load configuration: %v", err)
+		fmt.Printf("⚠️  Warning: Failed to load configuration: %v\n", err)
+		fmt.Printf("    Using default configuration instead.\n\n")
+		defaultCfg := alfaconfig.DefaultConfig()
+		defaultCfg.Workbench.Path = workbenchDir
+		cfg = &defaultCfg
 	}
 
 	// Apply CLI overrides (CLI has priority over alfa.yaml)
@@ -81,7 +86,7 @@ func main() {
 	// Update workbench path in case it was changed by CLI
 	workbenchDir = cfg.Workbench.Path
 
-	// Save the final configuration back to alfa.yaml
+	// Try to save the final configuration back to alfa.yaml (non-fatal)
 	configPath := alfaconfig.ResolveConfigPath(workbenchDir)
 	if err := alfaconfig.SaveConfig(configPath, cfg); err != nil {
 		fmt.Printf("⚠️  Warning: Failed to save configuration: %v\n", err)
@@ -184,7 +189,7 @@ func main() {
 	// Try loading from file, fallback to embedded config
 	aiCfg, err = ai.LoadConfigWithEnv(aiConfigPath)
 	if err != nil {
-		if os.IsNotExist(err) {
+		if errors.Is(err, os.ErrNotExist) {
 			// Use embedded config from alfa.yaml
 			aiCfg = convertToAIConfig(cfg)
 		} else {
@@ -198,16 +203,33 @@ func main() {
 		selectedProvider = aiCfg.DefaultProvider
 	}
 
-	// Validate provider exists in config
+	// Validate provider exists in config (fallback to first available if not found)
 	if _, ok := aiCfg.Providers[selectedProvider]; !ok {
-		fatal("Provider '%s' not found in config. Available providers: %v", selectedProvider, getProviderNames(aiCfg))
+		fmt.Printf("⚠️  Warning: Provider '%s' not found in config.\n", selectedProvider)
+		fmt.Printf("    Available providers: %v\n", getProviderNames(aiCfg))
+
+		// Try to use first available provider
+		if len(aiCfg.Providers) > 0 {
+			for name := range aiCfg.Providers {
+				selectedProvider = name
+				fmt.Printf("    Using '%s' instead.\n\n", selectedProvider)
+				break
+			}
+		} else {
+			fatal("No AI providers configured. Please set ANTHROPIC_API_KEY or OPENAI_API_KEY")
+		}
 	}
 
 	// Create LLM client from config
 	llm, err := ai.NewLLMFromConfig(aiCfg, selectedProvider)
 	if err != nil {
-		fatal("Failed to create LLM client: %v", err)
+		fmt.Printf("⚠️  Warning: Failed to create LLM client: %v\n", err)
+		fmt.Printf("    Please check your API key environment variables.\n")
+		fatal("Cannot continue without a valid AI provider")
 	}
+
+	// Debug: Show which model is being used
+	fmt.Printf("🤖 Using: %s (%s)\n", llm.Model(), llm.Provider())
 
 	// Setup voice if enabled
 	var stt speech.STT
@@ -215,46 +237,58 @@ func main() {
 	var recorder audio.Recorder
 	var player audio.Player
 
-	if cfg.Voice.Enabled {
+	if cfg.Voice.InputEnabled || cfg.Voice.OutputEnabled {
 		openaiKey := os.Getenv("OPENAI_API_KEY")
 		if openaiKey == "" {
 			fatal("Voice mode requires OPENAI_API_KEY environment variable")
 		}
 
-		// Create STT (Whisper)
-		stt = speech.NewWhisperSTT(speech.STTConfig{
-			APIKey: openaiKey,
-			Model:  "whisper-1",
-			Timeout: 60 * time.Second,
-		})
+		// Create STT (Whisper) if input enabled
+		if cfg.Voice.InputEnabled {
+			stt = speech.NewWhisperSTT(speech.STTConfig{
+				APIKey:  openaiKey,
+				Model:   "whisper-1",
+				Timeout: 60 * time.Second,
+			})
 
-		// Create TTS
-		tts = speech.NewOpenAITTS(speech.TTSConfig{
-			APIKey: openaiKey,
-			Model:  "tts-1",
-			Voice:  "alloy",
-			Speed:  1.0,
-			Format: "mp3",
-			Timeout: 60 * time.Second,
-		})
-
-		// Create audio recorder
-		recorder = audio.NewVADRecorder(audio.DefaultRecordConfig())
-		if !recorder.IsAvailable() {
-			fmt.Println("⚠️  Warning: sox not found. Voice input disabled.")
-			fmt.Println("   Install with: brew install sox")
-			recorder = nil
+			// Create audio recorder
+			recorder = audio.NewVADRecorder(audio.DefaultRecordConfig())
+			if !recorder.IsAvailable() {
+				fmt.Println("⚠️  Warning: sox not found. Voice input disabled.")
+				fmt.Println("   Install with: brew install sox")
+				recorder = nil
+				stt = nil
+			}
 		}
 
-		// Create audio player
-		player = audio.NewSoxPlayer()
-		if !player.IsAvailable() {
-			fmt.Println("⚠️  Warning: No audio player found. Voice output disabled.")
-			player = nil
+		// Create TTS if output enabled
+		if cfg.Voice.OutputEnabled {
+			tts = speech.NewOpenAITTS(speech.TTSConfig{
+				APIKey:  openaiKey,
+				Model:   "tts-1",
+				Voice:   "alloy",
+				Speed:   1.0,
+				Format:  "mp3",
+				Timeout: 60 * time.Second,
+			})
+
+			// Create audio player
+			player = audio.NewSoxPlayer()
+			if !player.IsAvailable() {
+				fmt.Println("⚠️  Warning: No audio player found. Voice output disabled.")
+				player = nil
+				tts = nil
+			}
 		}
 
-		if recorder != nil || player != nil {
+		if stt != nil || tts != nil {
 			fmt.Println("🎤 Voice mode enabled")
+			if stt != nil {
+				fmt.Println("   ✓ Voice input active")
+			}
+			if tts != nil {
+				fmt.Println("   ✓ Voice output active")
+			}
 		}
 	}
 
@@ -330,6 +364,9 @@ func main() {
 		AllowSelfModify: cfg.SelfModify.Allowed,
 	})
 
+	// Set voice controller for runtime voice management
+	toolDispatcher.SetVoiceController(orch)
+
 	// Cleanup on exit
 	if cellMgr != nil {
 		defer func() {
@@ -383,14 +420,33 @@ func convertToAIConfig(cfg *alfaconfig.AlfaConfig) *ai.ConfigFile {
 		Providers:       make(map[string]ai.Config),
 	}
 
+	// For each provider, get the model to use and its config
 	for name, provider := range cfg.AI.Providers {
+		// Determine which model to use for this provider
+		modelName := provider.DefaultModel
+		if name == cfg.AI.Provider && cfg.AI.SelectedModel != "" {
+			// If this is the active provider and a specific model is selected, use it
+			modelName = cfg.AI.SelectedModel
+		}
+
+		// Get the model's configuration
+		modelCfg, ok := provider.Models[modelName]
+		if !ok {
+			// Fallback to first available model if default not found
+			for firstModel, firstCfg := range provider.Models {
+				modelName = firstModel
+				modelCfg = firstCfg
+				break
+			}
+		}
+
 		aiCfg.Providers[name] = ai.Config{
-			Model:       provider.Model,
-			MaxTokens:   provider.MaxTokens,
-			Temperature: provider.Temperature,
-			Timeout:     provider.Timeout,
-			RetryCount:  provider.RetryCount,
-			RetryDelay:  provider.RetryDelay,
+			Model:       modelName,
+			MaxTokens:   modelCfg.MaxTokens,
+			Temperature: modelCfg.Temperature,
+			Timeout:     modelCfg.Timeout,
+			RetryCount:  modelCfg.RetryCount,
+			RetryDelay:  modelCfg.RetryDelay,
 		}
 	}
 

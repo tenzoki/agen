@@ -1,0 +1,32 @@
+# Alfa Config
+
+app_name: "alfa"
+debug: true
+
+capture_output: true
+enable_cellorg: true
+max_iterations: 10
+max_output: 10
+auto-confirm: true
+sandbox: false
+sandbox_image: "golang:1.24-alpine"
+voice: false
+
+# For sending stop | pause | resume to all agents (broadcast)
+support:
+  port: ":9000"
+  #always "tcp"
+  debug: true
+
+broker:
+  port: ":9001"
+  protocol: "tcp" # tcp | uds
+  codec: "json"
+  debug: true
+
+# Pool
+pool:
+  - "pool.yaml"
+
+await-timeout_seconds: 300
+await_support_reboot_seconds: 300
