@@ -39,7 +39,8 @@ type Orchestrator struct {
 	contextMgr     *alfacontext.Manager
 	toolDispatcher *tools.Dispatcher
 	vcr            *vcr.Vcr
-	projectVFS     *vfs.VFS
+	targetVFS      *vfs.VFS
+	targetName     string
 	projectManager *project.Manager
 	workbenchRoot  string
 	frameworkRoot  string
@@ -64,7 +65,8 @@ type Config struct {
 	ContextManager  *alfacontext.Manager
 	ToolDispatcher  *tools.Dispatcher
 	VCR             *vcr.Vcr
-	ProjectVFS      *vfs.VFS
+	TargetVFS       *vfs.VFS
+	TargetName      string
 	ProjectManager  *project.Manager
 	WorkbenchRoot   string
 	FrameworkRoot   string
@@ -95,7 +97,8 @@ func New(cfg Config) *Orchestrator {
 		contextMgr:      cfg.ContextManager,
 		toolDispatcher:  cfg.ToolDispatcher,
 		vcr:             cfg.VCR,
-		projectVFS:      cfg.ProjectVFS,
+		targetVFS:       cfg.TargetVFS,
+		targetName:      cfg.TargetName,
 		projectManager:  cfg.ProjectManager,
 		workbenchRoot:   cfg.WorkbenchRoot,
 		frameworkRoot:   frameworkRoot,
@@ -226,7 +229,7 @@ func (o *Orchestrator) getUserInput(ctx context.Context) (string, error) {
 		fmt.Println("🔴 Recording... (speak now, will auto-stop after 2s silence)")
 
 		// Create temp audio file
-		audioPath := filepath.Join(o.projectVFS.Root(), "output", "recording.wav")
+		audioPath := filepath.Join(o.targetVFS.Root(), "output", "recording.wav")
 		os.MkdirAll(filepath.Dir(audioPath), 0755)
 
 		// Record until silence (max 30 seconds)
@@ -305,7 +308,7 @@ func (o *Orchestrator) extractVoiceContent(results []tools.Result) string {
 
 // speakWithInterrupt speaks text with ESC key interrupt support
 func (o *Orchestrator) speakWithInterrupt(ctx context.Context, text string) {
-	audioPath := filepath.Join(o.projectVFS.Root(), "output", "response.mp3")
+	audioPath := filepath.Join(o.targetVFS.Root(), "output", "response.mp3")
 	os.MkdirAll(filepath.Dir(audioPath), 0755)
 
 	// Generate audio file
@@ -511,7 +514,7 @@ func (o *Orchestrator) executePatch(action Action) tools.Result {
 	}
 
 	// Get absolute path within VFS
-	absPath, err := o.projectVFS.Path(filePath)
+	absPath, err := o.targetVFS.Path(filePath)
 	if err != nil {
 		return tools.Result{
 			Success: false,
@@ -657,31 +660,20 @@ CAPABILITIES:
 %d. Anonymize sensitive data with reversible pseudonyms (GDPR compliance)`, capNum, capNum+1, capNum+2, capNum+3, capNum+4)
 	}
 
-	contextInfo := ""
-	if o.allowSelfModify {
-		projectPath := o.projectVFS.Root()
-		projectName := filepath.Base(projectPath)
-		contextInfo = fmt.Sprintf(`
+	contextInfo := fmt.Sprintf(`
 
 ═══════════════════════════════════════════════════
-WORKING CONTEXTS - READ THIS CAREFULLY
+TARGET CONTEXT
 ═══════════════════════════════════════════════════
 
-You operate in TWO distinct contexts:
+Target: %s
+Root:   %s
 
-1. PROJECT: %s (current user project)
-2. FRAMEWORK: %s (your own codebase)
-
-CRITICAL: "my/the project" → PROJECT | "your/alfa/framework code" → FRAMEWORK
-
-FRAMEWORK OPS - Use absolute paths + cd to framework root:
-` + "```json" + `
-{"action": "run_command", "command": "cd %s && go test ./code/alfa/..."}
-` + "```" + `
+All file operations (read_file, write_file, patch) operate on TARGET.
+Commands (run_command, run_tests) execute in TARGET directory.
 
 ═══════════════════════════════════════════════════
-`, projectName, o.frameworkRoot, o.frameworkRoot)
-	}
+`, o.targetName, o.targetVFS.Root())
 
 	return capabilities + contextInfo + `
 
@@ -1039,13 +1031,12 @@ GUIDELINES:
 - Follow existing code style
 
 IMPORTANT: All file operations are sandboxed to the project directory.
-You cannot access files outside the project.
+You cannot access files outside the target directory.
 
-CURRENT PROJECT: ` + o.contextMgr.GetActiveProject() + `
-Project root: ` + o.projectVFS.Root() + `
+TARGET: ` + o.targetName + `
+Target root: ` + o.targetVFS.Root() + `
 
-NOTE: When asked to "create an app" or "create a file", create it in the CURRENT PROJECT above.
-Only use "create_project" action when EXPLICITLY asked to create a NEW project with a different name.
+NOTE: All file operations operate within this TARGET directory.
 `
 }
 
@@ -1123,6 +1114,10 @@ func extractCodeBlocks(content string) []CodeBlock {
 
 // SwitchProject switches to a different project at runtime
 func (o *Orchestrator) SwitchProject(projectName string) error {
+	if o.allowSelfModify {
+		return fmt.Errorf("project switching not available in self-modification mode (target is framework)")
+	}
+
 	if o.projectManager == nil {
 		return fmt.Errorf("project manager not available")
 	}
@@ -1144,7 +1139,8 @@ func (o *Orchestrator) SwitchProject(projectName string) error {
 	newVCR := vcr.NewVcr("assistant", projectPath)
 
 	// Update orchestrator state
-	o.projectVFS = newVFS
+	o.targetVFS = newVFS
+	o.targetName = projectName
 	o.vcr = newVCR
 
 	// Update tool dispatcher with new VFS
@@ -1155,7 +1151,8 @@ func (o *Orchestrator) SwitchProject(projectName string) error {
 	o.contextMgr.SetActiveProject(projectName)
 
 	fmt.Printf("\n✅ Switched to project '%s'\n", projectName)
-	fmt.Printf("   Path: %s\n\n", projectPath)
+	fmt.Printf("   Target: %s\n", projectName)
+	fmt.Printf("   Path:   %s\n\n", projectPath)
 
 	return nil
 }

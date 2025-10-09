@@ -169,15 +169,30 @@ func main() {
 		fatal("Failed to create workbench VFS: %v", err)
 	}
 
-	// Project VFS: for source code, sandboxed (read/write)
-	projectDir := projectMgr.GetProjectPath(selectedProject)
-	projectVFS, err := vfs.NewVFS(projectDir, false)
-	if err != nil {
-		fatal("Failed to create project VFS: %v", err)
+	// Target VFS: switches based on self-modification mode
+	var targetVFS *vfs.VFS
+	var targetName string
+
+	if cfg.SelfModify.Allowed {
+		// Self-modification mode: target = framework code
+		frameworkRoot := filepath.Dir(workbenchDir)
+		targetVFS, err = vfs.NewVFS(frameworkRoot, false)
+		if err != nil {
+			fatal("Failed to create framework VFS: %v", err)
+		}
+		targetName = "framework"
+	} else {
+		// Normal mode: target = user project
+		projectDir := projectMgr.GetProjectPath(selectedProject)
+		targetVFS, err = vfs.NewVFS(projectDir, false)
+		if err != nil {
+			fatal("Failed to create project VFS: %v", err)
+		}
+		targetName = selectedProject
 	}
 
 	fmt.Printf("Workbench: %s\n", workbenchVFS.Root())
-	fmt.Printf("Project:   %s (%s)\n\n", selectedProject, projectVFS.Root())
+	fmt.Printf("Target:    %s (%s)\n\n", targetName, targetVFS.Root())
 
 	// Load AI configuration (either from ai-config.json or use embedded config)
 	var aiCfg *ai.ConfigFile
@@ -312,11 +327,11 @@ func main() {
 	// Create components
 	contextMgr := alfacontext.NewManager(workbenchVFS.Root())
 	contextMgr.SetActiveProject(selectedProject)
-	toolDispatcher := tools.NewDispatcherWithSandbox(projectVFS, sb, cfg.Sandbox.Enabled)
+	toolDispatcher := tools.NewDispatcherWithSandbox(targetVFS, sb, cfg.Sandbox.Enabled)
 	toolDispatcher.SetProjectManager(projectMgr)
 	toolDispatcher.SetOutputCapture(cfg.Output.CaptureEnabled, cfg.Output.MaxSizeKB*1024) // Convert KB to bytes
 	toolDispatcher.SetConfig(cfg, configPath) // Enable runtime config management
-	vcrInstance := vcr.NewVcr("assistant", projectVFS.Root())
+	vcrInstance := vcr.NewVcr("assistant", targetVFS.Root())
 
 	// Initialize Cellorg if enabled
 	var cellMgr *cellorchestrator.EmbeddedOrchestrator
@@ -351,7 +366,8 @@ func main() {
 		ContextManager:  contextMgr,
 		ToolDispatcher:  toolDispatcher,
 		VCR:             vcrInstance,
-		ProjectVFS:      projectVFS,
+		TargetVFS:       targetVFS,
+		TargetName:      targetName,
 		ProjectManager:  projectMgr,
 		WorkbenchRoot:   workbenchDir,
 		CellManager:     cellMgr,
