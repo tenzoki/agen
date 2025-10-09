@@ -577,6 +577,13 @@ func (o *Orchestrator) formatResults(results []tools.Result) string {
 		} else {
 			lines = append(lines, "✗ "+r.Message)
 		}
+
+		// Show Output if present and non-empty
+		if r.Output != nil {
+			if outputStr, ok := r.Output.(string); ok && outputStr != "" {
+				lines = append(lines, outputStr)
+			}
+		}
 	}
 	return strings.Join(lines, "\n")
 }
