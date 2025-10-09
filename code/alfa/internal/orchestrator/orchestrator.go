@@ -677,23 +677,40 @@ When the user says:
 
 → They mean: Modify files in code/alfa/, code/atomic/, code/omni/, etc.
 
-FRAMEWORK OPERATIONS - EXAMPLES:
+FRAMEWORK OPERATIONS - WORKFLOW:
 
-Read framework code:
+When asked to modify framework code, follow these steps:
+1. Search for the relevant code (optional, if you don't know where it is)
+2. Read the file(s) to understand current implementation
+3. Plan the changes
+4. Apply patch(es) to modify the code
+5. Test if needed
+
+Example workflow - "Add feature X to alfa":
+
+Step 1 - Search (if needed):
+` + "```json" + `
+{"action": "search", "query": "relevant keyword", "pattern": "*.go"}
+` + "```" + `
+
+Step 2 - Read the file:
 ` + "```json" + `
 {"action": "read_file", "path": "code/alfa/internal/orchestrator/orchestrator.go"}
 ` + "```" + `
 
-Modify framework code:
+Step 3 - Modify the code:
 ` + "```json" + `
-{"action": "patch", "file": "code/alfa/internal/tools/tools.go", "operations": [...]}
+{"action": "patch", "file": "code/alfa/internal/orchestrator/orchestrator.go", "operations": [
+  {"line": 100, "type": "insert", "content": ["// New code here"]}
+]}
 ` + "```" + `
 
-Run framework tests:
+Step 4 - Test:
 ` + "```json" + `
 {"action": "run_tests", "pattern": "./code/alfa/..."}
 ` + "```" + `
 
+IMPORTANT: Don't stop after search! Continue with read_file and patch.
 You can directly read and modify ANY file in code/alfa/, code/atomic/, code/omni/, etc.
 All paths are relative to TARGET root.`
 	} else {
