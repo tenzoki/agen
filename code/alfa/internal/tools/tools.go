@@ -1438,7 +1438,9 @@ func (d *Dispatcher) executeConfigList(action Action) Result {
 
 	// Format settings for display
 	var output strings.Builder
-	output.WriteString("Current configuration settings:\n\n")
+	output.WriteString("═══════════════════════════════════════════════\n")
+	output.WriteString("ALFA CONFIGURATION STATUS\n")
+	output.WriteString("═══════════════════════════════════════════════\n\n")
 
 	// Group by category
 	categories := map[string][]string{
@@ -1462,6 +1464,44 @@ func (d *Dispatcher) executeConfigList(action Action) Result {
 		output.WriteString("\n")
 	}
 
+	// Add detailed AI provider information
+	if d.config.AI.Provider != "" {
+		output.WriteString("───────────────────────────────────────────────\n")
+		output.WriteString("[AI Providers - Detailed]\n\n")
+
+		// Show configured providers
+		for providerName, provider := range d.config.AI.Providers {
+			active := ""
+			if providerName == d.config.AI.Provider {
+				active = " ★ ACTIVE"
+			}
+
+			output.WriteString(fmt.Sprintf("Provider: %s%s\n", providerName, active))
+			output.WriteString(fmt.Sprintf("  Default Model: %s\n", provider.DefaultModel))
+
+			// Show available models
+			if len(provider.Models) > 0 {
+				output.WriteString("  Available Models:\n")
+				for modelName, modelCfg := range provider.Models {
+					activeModel := ""
+					if providerName == d.config.AI.Provider && modelName == d.config.AI.SelectedModel {
+						activeModel = " ← SELECTED"
+					} else if providerName == d.config.AI.Provider && modelName == provider.DefaultModel && d.config.AI.SelectedModel == "" {
+						activeModel = " ← DEFAULT"
+					}
+
+					output.WriteString(fmt.Sprintf("    • %s%s\n", modelName, activeModel))
+					output.WriteString(fmt.Sprintf("      Description:  %s\n", modelCfg.Description))
+					output.WriteString(fmt.Sprintf("      Max Tokens:   %d\n", modelCfg.MaxTokens))
+					output.WriteString(fmt.Sprintf("      Temperature:  %.1f\n", modelCfg.Temperature))
+					output.WriteString(fmt.Sprintf("      Timeout:      %s\n", modelCfg.Timeout))
+				}
+			}
+			output.WriteString("\n")
+		}
+	}
+
+	output.WriteString("───────────────────────────────────────────────\n")
 	output.WriteString(fmt.Sprintf("Config file: %s\n", d.configPath))
 
 	return Result{
