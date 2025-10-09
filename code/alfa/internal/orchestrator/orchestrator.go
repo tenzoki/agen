@@ -660,6 +660,48 @@ CAPABILITIES:
 %d. Anonymize sensitive data with reversible pseudonyms (GDPR compliance)`, capNum, capNum+1, capNum+2, capNum+3, capNum+4)
 	}
 
+	// Add examples based on target type
+	var examples string
+	if o.allowSelfModify {
+		examples = `
+
+FRAMEWORK OPERATIONS - EXAMPLES:
+
+Read framework code:
+` + "```json" + `
+{"action": "read_file", "path": "code/alfa/internal/orchestrator/orchestrator.go"}
+` + "```" + `
+
+Modify framework code:
+` + "```json" + `
+{"action": "patch", "file": "code/alfa/internal/tools/tools.go", "operations": [...]}
+` + "```" + `
+
+Run framework tests:
+` + "```json" + `
+{"action": "run_tests", "pattern": "./code/alfa/..."}
+` + "```" + `
+
+You can directly read and modify ANY file in code/alfa/, code/atomic/, code/omni/, etc.
+All paths are relative to TARGET root.`
+	} else {
+		examples = `
+
+PROJECT OPERATIONS - EXAMPLES:
+
+Read project file:
+` + "```json" + `
+{"action": "read_file", "path": "main.go"}
+` + "```" + `
+
+Create new file:
+` + "```json" + `
+{"action": "write_file", "path": "utils.go", "content": "package main\n..."}
+` + "```" + `
+
+All paths are relative to TARGET root (your project directory).`
+	}
+
 	contextInfo := fmt.Sprintf(`
 
 ═══════════════════════════════════════════════════
@@ -671,9 +713,10 @@ Root:   %s
 
 All file operations (read_file, write_file, patch) operate on TARGET.
 Commands (run_command, run_tests) execute in TARGET directory.
+%s
 
 ═══════════════════════════════════════════════════
-`, o.targetName, o.targetVFS.Root())
+`, o.targetName, o.targetVFS.Root(), examples)
 
 	return capabilities + contextInfo + `
 
