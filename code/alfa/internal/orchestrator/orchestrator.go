@@ -158,6 +158,253 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 
 // processRequest handles a single user request through multiple AI iterations
 func (o *Orchestrator) processRequest(ctx context.Context, userInput string, systemPrompt string) error {
+	// Use PEV cell if cellorg is available
+	if o.cellManager != nil {
+		return o.processRequestWithPEV(ctx, userInput)
+	}
+
+	// Fallback to naive loop if cellorg not available
+	return o.processRequestNaive(ctx, userInput, systemPrompt)
+}
+
+// processRequestWithPEV handles a request using the Plan-Execute-Verify cell
+func (o *Orchestrator) processRequestWithPEV(ctx context.Context, userInput string) error {
+	o.contextMgr.AddUserMessage(userInput)
+
+	// Check if PEV cell is running
+	cells := o.cellManager.ListCells()
+
+	// Find PEV cell
+	var pevCellRunning bool
+	for _, cell := range cells {
+		if cell.CellID == "alfa:plan-execute-verify" {
+			pevCellRunning = true
+			break
+		}
+	}
+
+	if !pevCellRunning {
+		fmt.Println("🔧 Starting Plan-Execute-Verify cell...")
+		// Start the PEV cell
+		opts := cellorchestrator.CellOptions{
+			ProjectID:   o.targetName,
+			VFSRoot:     o.targetVFS.Root(),
+			Environment: make(map[string]string),
+		}
+
+		// Pass framework root for self-modification mode
+		if o.allowSelfModify {
+			opts.Environment["FRAMEWORK_ROOT"] = o.frameworkRoot
+		}
+
+		if err := o.cellManager.StartCell("alfa:plan-execute-verify", opts); err != nil {
+			return fmt.Errorf("failed to start PEV cell: %w", err)
+		}
+		fmt.Println("✓ PEV cell started")
+		// Give agents a moment to initialize
+		time.Sleep(2 * time.Second)
+	}
+
+	// Create user request message
+	requestID := generateID()
+	targetContext := o.getTargetContext()
+
+	userRequest := map[string]interface{}{
+		"id":      requestID,
+		"type":    "user_request",
+		"content": userInput,
+		"context": targetContext,
+	}
+
+	// Publish to pev-bus using event bridge (will be routed to agents)
+	fmt.Println("\n📋 Planning your request...")
+	if err := o.cellManager.Publish("pev-bus", userRequest); err != nil {
+		return fmt.Errorf("failed to publish user request: %w", err)
+	}
+
+	// Subscribe to pev-bus for responses
+	responseChan := o.cellManager.Subscribe("pev-bus")
+	defer o.cellManager.Unsubscribe("pev-bus", responseChan)
+
+	// Wait for responses with timeout
+	timeout := time.After(10 * time.Minute)
+	var currentIteration int
+
+	for {
+		select {
+		case response := <-responseChan:
+			// Handle different message types
+			handled, done, err := o.handlePEVEventMessage(ctx, &response, requestID, &currentIteration)
+			if err != nil {
+				return err
+			}
+			if done {
+				return nil
+			}
+			if !handled {
+				// Ignore messages not for this request
+				continue
+			}
+
+		case <-timeout:
+			return fmt.Errorf("PEV request timeout (10 minutes)")
+
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+}
+
+// getTargetContext returns context about the current target (framework vs project)
+func (o *Orchestrator) getTargetContext() map[string]interface{} {
+	return map[string]interface{}{
+		"target_vfs":      o.targetName,
+		"target_root":     o.targetVFS.Root(),
+		"self_modify":     o.allowSelfModify,
+		"workbench_root":  o.workbenchRoot,
+		"framework_root":  o.frameworkRoot,
+	}
+}
+
+// handlePEVEventMessage processes a single event from the PEV cell
+// Returns (handled, done, error)
+// - handled: true if this message was for our request
+// - done: true if request is complete (success or failure)
+func (o *Orchestrator) handlePEVEventMessage(ctx context.Context, event *cellorchestrator.Event, requestID string, currentIteration *int) (bool, bool, error) {
+	// Extract payload from event data
+	payload := event.Data
+	if payload == nil {
+		return false, false, nil
+	}
+
+	// Check if this message is for our request
+	msgRequestID, ok := payload["request_id"].(string)
+	if !ok || msgRequestID != requestID {
+		return false, false, nil
+	}
+
+	// Get message type from payload
+	msgType, _ := payload["type"].(string)
+
+	// Handle different message types
+	switch msgType {
+	case "plan_request":
+		// Planner is working
+		iteration, _ := payload["iteration"].(int)
+		if iteration > *currentIteration {
+			*currentIteration = iteration
+		}
+		fmt.Printf("\r🔄 Planning... (iteration %d/%d)    ", *currentIteration, o.maxIterations)
+		return true, false, nil
+
+	case "execution_plan":
+		// Plan created, executor starting
+		plan, _ := payload["plan"].(map[string]interface{})
+		if plan != nil {
+			steps, _ := plan["steps"].([]interface{})
+			fmt.Printf("\r✓ Plan ready (%d steps)              \n", len(steps))
+		}
+		fmt.Print("⚙️  Executing plan...    ")
+		return true, false, nil
+
+	case "execute_task":
+		// Executor is working
+		fmt.Print("\r⚙️  Executing plan...    ")
+		return true, false, nil
+
+	case "execution_results":
+		// Execution complete, verifying
+		fmt.Print("\r✓ Execution complete      \n")
+		fmt.Print("🔍 Verifying results...   ")
+		return true, false, nil
+
+	case "verify_request":
+		// Verifier is working
+		fmt.Print("\r🔍 Verifying results...   ")
+		return true, false, nil
+
+	case "verification_report":
+		// Verification complete
+		goalAchieved, _ := payload["goal_achieved"].(bool)
+		if goalAchieved {
+			fmt.Print("\r✓ Verification passed     \n")
+		} else {
+			issues, _ := payload["issues"].([]interface{})
+			fmt.Printf("\r⚠️  Issues found (%d), re-planning... \n", len(issues))
+		}
+		return true, false, nil
+
+	case "user_response":
+		// Final response from coordinator
+		fmt.Print("\r                          \r") // Clear progress line
+		return o.handlePEVResponse(ctx, payload)
+
+	default:
+		// Unknown message type, ignore
+		return false, false, nil
+	}
+}
+
+// handlePEVResponse processes the final user_response from the PEV coordinator
+// Returns (handled, done, error)
+func (o *Orchestrator) handlePEVResponse(ctx context.Context, payload map[string]interface{}) (bool, bool, error) {
+	status, _ := payload["status"].(string)
+	goalAchieved, _ := payload["goal_achieved"].(bool)
+	iterations, _ := payload["iterations"].(int)
+	message, _ := payload["message"].(string)
+
+	if status == "complete" && goalAchieved {
+		// Success!
+		fmt.Printf("\n✅ Request completed successfully after %d iteration(s)\n", iterations)
+		if message != "" {
+			o.respond(ctx, message)
+		}
+
+		// Record success in context
+		o.contextMgr.AddAssistantMessage(fmt.Sprintf("Task completed successfully in %d iterations", iterations))
+		return true, true, nil
+	}
+
+	if status == "failed" {
+		// Failed after max iterations
+		fmt.Printf("\n❌ Request failed after %d iteration(s)\n", iterations)
+		if message != "" {
+			fmt.Println(message)
+		}
+
+		// Show issues if present
+		if issues, ok := payload["issues"].([]interface{}); ok && len(issues) > 0 {
+			fmt.Println("\nIssues encountered:")
+			for _, issue := range issues {
+				if issueStr, ok := issue.(string); ok {
+					fmt.Printf("  • %s\n", issueStr)
+				}
+			}
+		}
+
+		// Show next actions if present
+		if nextActions, ok := payload["next_actions"].([]interface{}); ok && len(nextActions) > 0 {
+			fmt.Println("\nSuggested next actions:")
+			for _, action := range nextActions {
+				if actionMap, ok := action.(map[string]interface{}); ok {
+					desc, _ := actionMap["description"].(string)
+					priority, _ := actionMap["priority"].(string)
+					fmt.Printf("  • [%s] %s\n", priority, desc)
+				}
+			}
+		}
+
+		// Record failure in context
+		o.contextMgr.AddAssistantMessage(fmt.Sprintf("Task failed after %d iterations. Max iterations reached.", iterations))
+		return true, true, fmt.Errorf("PEV request failed after %d iterations", iterations)
+	}
+
+	// Unknown status
+	return true, true, fmt.Errorf("unexpected PEV status: %s", status)
+}
+
+// processRequestNaive is the original naive loop implementation (fallback)
+func (o *Orchestrator) processRequestNaive(ctx context.Context, userInput string, systemPrompt string) error {
 	o.contextMgr.AddUserMessage(userInput)
 
 	iteration := 0

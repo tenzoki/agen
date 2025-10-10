@@ -1,0 +1,75 @@
+cell:
+  id: "alfa:plan-execute-verify"
+  description: "Plan-Execute-Verify loop for intelligent code modification"
+  debug: true
+
+  orchestration:
+    startup_timeout: "30s"
+    shutdown_timeout: "15s"
+    max_retries: 3
+    retry_delay: "3s"
+
+  agents:
+    # Coordinator - Orchestrates the PEV loop
+    # Subscribes to pev-bus for all messages, publishes to specific topics
+    - id: "pev-coordinator-001"
+      agent_type: "pev-coordinator"
+      ingress: "sub:pev-bus"
+      egress: "pub:pev-bus"
+      config:
+        max_iterations: 10
+        timeout_per_iteration: "5m"
+        model: "gpt-5-mini"
+
+    # Planner - Strategic planning
+    # Subscribes to plan-requests, publishes to pev-bus
+    - id: "pev-planner-001"
+      agent_type: "pev-planner"
+      ingress: "sub:plan-requests"
+      egress: "pub:pev-bus"
+      dependencies: ["pev-coordinator-001"]
+      config:
+        model: "claude-sonnet-4-5-20250929"
+        temperature: 0.7
+        max_tokens: 64000
+        data_path: "./data/planner"
+
+    # Executor - Execute plan steps
+    # Subscribes to execute-tasks, publishes to pev-bus
+    - id: "pev-executor-001"
+      agent_type: "pev-executor"
+      ingress: "sub:execute-tasks"
+      egress: "pub:pev-bus"
+      dependencies: ["pev-planner-001"]
+      config:
+        model: "gpt-5-mini"
+        temperature: 0
+        max_tokens: 128000
+        tools_enabled: true
+        data_path: "./data/executor"
+
+    # Verifier - Validate results
+    # Subscribes to verify-requests, publishes to pev-bus
+    - id: "pev-verifier-001"
+      agent_type: "pev-verifier"
+      ingress: "sub:verify-requests"
+      egress: "pub:pev-bus"
+      dependencies: ["pev-executor-001"]
+      config:
+        model: "o1"
+        temperature: 0
+        max_tokens: 100000
+        strict_validation: true
+        data_path: "./data/verifier"
+
+    # Knowledge Store - Records and learns from PEV history
+    # Subscribes to pev-bus for all events, provides query responses
+    - id: "pev-knowledge-001"
+      agent_type: "pev-knowledge"
+      ingress: "sub:pev-bus"
+      egress: "pub:pev-bus"
+      dependencies: []
+      config:
+        data_path: "./data/pev-knowledge"
+        enable_graph: true
+        enable_search: true

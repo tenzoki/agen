@@ -1,0 +1,64 @@
+{
+  "id": "plan-1760107600615209000",
+  "request_id": "test-003",
+  "type": "execution_plan",
+  "goal": "Add warning triangle when self_modify=true",
+  "target_context": "framework",
+  "steps": [
+    {
+      "id": "step-1",
+      "phase": "discovery",
+      "action": "search",
+      "params": {
+        "pattern": "*.go",
+        "query": "getUserInput"
+      },
+      "depends_on": [],
+      "success_criteria": "Find prompt rendering code"
+    },
+    {
+      "id": "step-2",
+      "phase": "analysis",
+      "action": "read_file",
+      "params": {
+        "path": "code/alfa/internal/orchestrator/orchestrator.go"
+      },
+      "depends_on": [
+        "step-1"
+      ],
+      "success_criteria": "Understand current implementation"
+    },
+    {
+      "id": "step-3",
+      "phase": "implementation",
+      "action": "patch",
+      "params": {
+        "file": "code/alfa/internal/orchestrator/orchestrator.go",
+        "operations": [
+          {
+            "content": "fmt.Print(\"⚠️  \")",
+            "line": 217,
+            "type": "insert"
+          }
+        ]
+      },
+      "depends_on": [
+        "step-2"
+      ],
+      "success_criteria": "Warning icon added to prompt"
+    },
+    {
+      "id": "step-4",
+      "phase": "validation",
+      "action": "run_tests",
+      "params": {
+        "pattern": "./code/alfa/..."
+      },
+      "depends_on": [
+        "step-3"
+      ],
+      "success_criteria": "All tests pass"
+    }
+  ],
+  "overall_success": "All steps completed successfully and goal achieved"
+}

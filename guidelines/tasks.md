@@ -1,481 +1,658 @@
-# Phase 4: Cellorg Token Budget Integration
+# Plan-Execute-Verify Architecture for ALFA
 
-**Status**: Concept / Design Phase
-**Date**: 2025-10-08
-**Context**: Extending token budget management from alfa (AI workbench) to cellorg (agent orchestration)
-
----
-
-## Overview
-
-Phase 1-3 implemented token budget management for alfa's direct AI interactions. Phase 4 extends this capability to **agent-to-agent communication** within cellorg, enabling agents to automatically handle large payloads that exceed token limits when communicating with AI-powered agents.
-
-## Problem Statement
-
-Currently, when an agent sends a large document/dataset to an AI-powered agent (e.g., text_analyzer, summary_generator, embedding_agent):
-
-1. **No automatic chunking**: Large payloads fail with "max context exceeded" errors
-2. **No response merging**: Agents can't handle streaming multi-chunk responses
-3. **No budget awareness**: Agents don't know if their payload fits within limits
-
-This breaks workflows like:
-
-- Large document analysis pipelines
-- Bulk text processing cells
-- Multi-document RAG workflows
-
-## Architecture Principles Compliance
-
-✅ **Cells-First Design**: Chunking happens at envelope level, transparent to agents
-✅ **Zero-Boilerplate Agents**: Framework handles complexity, agents stay simple
-✅ **Public API Only**: Uses existing envelope/broker infrastructure
-✅ **No Breaking Changes**: Backward compatible with existing agents
+**Status**: Design Proposal
+**Last Updated**: 2025-10-09
+**Purpose**: Transform alfa from naive single-turn execution to intelligent iterative workflow
 
 ---
 
-## Design
+## Executive Summary
 
-### 1. Token Budget Manager in Envelope Processing
+Current alfa architecture stops after a single successful tool execution. This prevents:
+- Multi-step workflows (search → read → patch → test)
+- Self-correction when approach fails
+- Goal-oriented iteration until completion
 
-**Location**: `cellorg/internal/envelope/budget.go`
+**Solution**: Plan-Execute-Verify (PEV) pattern using AGEN's cell/agent architecture.
 
-Add token budget calculation to envelope creation/routing:
+---
 
-```go
-type EnvelopeBudget struct {
-    // From omni/budget
-    Manager *budget.Manager
+## Current Problem
 
-    // Envelope-specific
-    PayloadTokens   int
-    HeaderTokens    int
-    TotalTokens     int
-    NeedsSplitting  bool
-    SuggestedChunks int
-}
-
-// CalculateBudget estimates token usage for an envelope
-func CalculateBudget(env *Envelope, counter tokencount.Counter) (*EnvelopeBudget, error) {
-    // Count payload tokens
-    payloadStr := string(env.Payload)
-    payloadTokens, _ := counter.Count(payloadStr)
-
-    // Count header/metadata tokens (conservative)
-    headerTokens := estimateMetadataTokens(env)
-
-    return &EnvelopeBudget{
-        PayloadTokens: payloadTokens,
-        HeaderTokens:  headerTokens,
-        TotalTokens:   payloadTokens + headerTokens,
-        // ... budget calculation
-    }
-}
+### Naive Loop (Current)
+```
+User Request → AI Response → Execute Tools → if(success) STOP
 ```
 
-### 2. Chunked Envelope Support
+**Issues**:
+- Stops after first successful action (e.g., search)
+- No concept of "goal achieved"
+- No self-correction
+- No iterative refinement
 
-**Location**: `cellorg/internal/envelope/chunking.go`
-
-Add envelope splitting for large payloads:
-
-```go
-// ChunkEnvelope splits a large envelope into manageable chunks
-func ChunkEnvelope(env *Envelope, budget *EnvelopeBudget) ([]*Envelope, error) {
-    if !budget.NeedsSplitting {
-        return []*Envelope{env}, nil
-    }
-
-    // Parse payload as JSON or text
-    var chunks []string
-    if isJSONArray(env.Payload) {
-        chunks = splitJSONArray(env.Payload, budget.SuggestedChunks)
-    } else {
-        chunks = splitTextPayload(env.Payload, budget.SuggestedChunks)
-    }
-
-    // Create chunk envelopes
-    envelopes := make([]*Envelope, len(chunks))
-    chunkID := uuid.New().String() // Group ID for all chunks
-
-    for i, chunk := range chunks {
-        envelopes[i] = &Envelope{
-            ID:          uuid.New().String(),
-            CorrelationID: env.ID, // Link to original
-            Source:      env.Source,
-            Destination: env.Destination,
-            MessageType: env.MessageType,
-            Payload:     json.RawMessage(chunk),
-
-            // Chunk metadata in headers
-            Headers: map[string]string{
-                "X-Chunk-ID":    chunkID,
-                "X-Chunk-Index": strconv.Itoa(i),
-                "X-Chunk-Total": strconv.Itoa(len(chunks)),
-            },
-
-            TraceID:  env.TraceID,
-            SpanID:   uuid.New().String(),
-        }
-    }
-
-    return envelopes, nil
-}
+### Example Failure
 ```
-
-### 3. Response Merger for Agents
-
-**Location**: `cellorg/public/agent/chunking.go`
-
-Public API for agents to handle chunked responses:
-
-```go
-type ChunkCollector struct {
-    chunks    map[string][]*Envelope // chunkID -> ordered chunks
-    mu        sync.Mutex
-    waitChans map[string]chan *Envelope // chunkID -> completion channel
-}
-
-// CollectChunk accumulates chunks and returns complete message when ready
-func (cc *ChunkCollector) CollectChunk(env *Envelope) (*Envelope, bool, error) {
-    chunkID := env.Headers["X-Chunk-ID"]
-    if chunkID == "" {
-        // Not a chunked message, return immediately
-        return env, true, nil
-    }
-
-    cc.mu.Lock()
-    defer cc.mu.Unlock()
-
-    // Accumulate chunk
-    if cc.chunks[chunkID] == nil {
-        cc.chunks[chunkID] = make([]*Envelope, 0)
-    }
-    cc.chunks[chunkID] = append(cc.chunks[chunkID], env)
-
-    // Check if complete
-    totalChunks, _ := strconv.Atoi(env.Headers["X-Chunk-Total"])
-    if len(cc.chunks[chunkID]) == totalChunks {
-        merged := mergeChunks(cc.chunks[chunkID])
-        delete(cc.chunks, chunkID)
-        return merged, true, nil // Complete!
-    }
-
-    return nil, false, nil // Still waiting for more chunks
-}
-
-// mergeChunks combines chunk payloads
-func mergeChunks(chunks []*Envelope) *Envelope {
-    // Sort by chunk index
-    sort.Slice(chunks, func(i, j int) bool {
-        idxI, _ := strconv.Atoi(chunks[i].Headers["X-Chunk-Index"])
-        idxJ, _ := strconv.Atoi(chunks[j].Headers["X-Chunk-Index"])
-        return idxI < idxJ
-    })
-
-    // Merge payloads
-    var merged []byte
-    for _, chunk := range chunks {
-        merged = append(merged, chunk.Payload...)
-    }
-
-    // Create merged envelope (use first chunk as template)
-    result := *chunks[0]
-    result.Payload = json.RawMessage(merged)
-    delete(result.Headers, "X-Chunk-ID")
-    delete(result.Headers, "X-Chunk-Index")
-    delete(result.Headers, "X-Chunk-Total")
-
-    return &result
-}
-```
-
-### 4. Broker Integration
-
-**Location**: `cellorg/internal/broker/chunking.go`
-
-Broker automatically chunks large messages before routing:
-
-```go
-type ChunkingBroker struct {
-    baseBroker *Broker
-    counters   map[string]tokencount.Counter // provider -> counter
-}
-
-// PublishWithChunking checks budget and chunks if needed
-func (cb *ChunkingBroker) PublishWithChunking(env *Envelope) error {
-    // Determine target agent's AI provider (from config)
-    targetProvider := cb.getTargetProvider(env.Destination)
-    if targetProvider == "" {
-        // Non-AI agent, no chunking needed
-        return cb.baseBroker.Publish(env)
-    }
-
-    // Get token counter for target provider
-    counter := cb.counters[targetProvider]
-    if counter == nil {
-        return cb.baseBroker.Publish(env) // Fallback
-    }
-
-    // Calculate budget
-    budget, err := CalculateBudget(env, counter)
-    if err != nil {
-        return cb.baseBroker.Publish(env) // Fallback
-    }
-
-    if !budget.NeedsSplitting {
-        return cb.baseBroker.Publish(env)
-    }
-
-    // Split into chunks
-    chunks, err := ChunkEnvelope(env, budget)
-    if err != nil {
-        return err
-    }
-
-    // Publish all chunks
-    for _, chunk := range chunks {
-        if err := cb.baseBroker.Publish(chunk); err != nil {
-            return err
-        }
-    }
-
-    return nil
-}
-```
-
-### 5. Agent Framework Integration
-
-**Location**: `cellorg/public/agent/framework.go`
-
-Update framework to provide chunking support:
-
-```go
-type AgentFramework struct {
-    // ... existing fields
-    chunkCollector *ChunkCollector // For receiving chunked messages
-}
-
-// In startMessageProcessing():
-func (f *AgentFramework) processMessage(msg *client.BrokerMessage) error {
-    env := &envelope.Envelope{...} // Convert BrokerMessage to Envelope
-
-    // Handle chunked messages
-    mergedEnv, complete, err := f.chunkCollector.CollectChunk(env)
-    if err != nil {
-        return err
-    }
-    if !complete {
-        return nil // Still waiting for more chunks
-    }
-
-    // Process complete message
-    return f.runner.ProcessMessage(f.baseAgent, mergedEnv)
-}
+User: "modify your code to add warning icon"
+Alfa: [executes search, finds 10 matches] → STOPS
+Expected: → read files → plan changes → patch files → test → commit
 ```
 
 ---
 
-## Implementation Plan
+## Plan-Execute-Verify Pattern
 
-### Step 1: Core Budget Integration
+### Conceptual Flow
 
-**Files**:
-
-- `cellorg/internal/envelope/budget.go` (new)
-- `cellorg/go.mod` (add omni/tokencount dependency)
-
-**Tasks**:
-
-- Add `CalculateBudget()` function
-- Add `estimateMetadataTokens()` helper
-- Write tests for envelope token counting
-
-### Step 2: Chunking Support
-
-**Files**:
-
-- `cellorg/internal/envelope/chunking.go` (new)
-- `cellorg/internal/envelope/chunking_test.go` (new)
-
-**Tasks**:
-
-- Implement `ChunkEnvelope()` with JSON and text splitting
-- Add chunk metadata headers
-- Test chunk ordering and merging
-
-### Step 3: Agent-Side Chunk Collection
-
-**Files**:
-
-- `cellorg/public/agent/chunking.go` (new)
-- `cellorg/public/agent/chunking_test.go` (new)
-
-**Tasks**:
-
-- Implement `ChunkCollector` for receiving chunks
-- Implement `mergeChunks()` with ordering
-- Add timeout handling for incomplete chunks
-
-### Step 4: Broker Integration
-
-**Files**:
-
-- `cellorg/internal/broker/chunking.go` (new)
-- `cellorg/internal/broker/service.go` (update)
-
-**Tasks**:
-
-- Add `ChunkingBroker` wrapper
-- Implement `PublishWithChunking()`
-- Add provider detection from agent config
-
-### Step 5: Framework Integration
-
-**Files**:
-
-- `cellorg/public/agent/framework.go` (update)
-- `cellorg/public/agent/framework_test.go` (update)
-
-**Tasks**:
-
-- Add `ChunkCollector` to framework
-- Update message processing loop
-- Handle chunk timeout and cleanup
-
-### Step 6: Configuration
-
-**Files**:
-
-- `workbench/config/pool.yaml` (update schema)
-- `workbench/config/cells/*.yaml` (examples)
-
-**Tasks**:
-
-- Add token budget config to agent pool
-- Document chunking behavior
-- Provide example configurations
+```
+┌─────────────────────────────────────────────────────────┐
+│                    USER REQUEST                         │
+└─────────────────────────────────────────────────────────┘
+                           ↓
+┌─────────────────────────────────────────────────────────┐
+│  PLANNING PHASE                                         │
+│  - Analyze request                                      │
+│  - Break into subtasks                                  │
+│  - Create execution plan                                │
+│  - Identify success criteria                            │
+└─────────────────────────────────────────────────────────┘
+                           ↓
+┌─────────────────────────────────────────────────────────┐
+│  EXECUTION PHASE                                        │
+│  - Execute tasks sequentially/parallel                  │
+│  - Collect results and observations                     │
+│  - Handle errors gracefully                             │
+└─────────────────────────────────────────────────────────┘
+                           ↓
+┌─────────────────────────────────────────────────────────┐
+│  VERIFICATION PHASE                                     │
+│  - Check goal achievement                               │
+│  - Validate results                                     │
+│  - Identify issues/gaps                                 │
+└─────────────────────────────────────────────────────────┘
+                           ↓
+              ┌────────────┴────────────┐
+              │   Goal Achieved?        │
+              └────────────┬────────────┘
+                           │
+          ┌────────────────┼────────────────┐
+          │ YES            │ NO             │
+          ↓                ↓
+    ┌─────────┐      ┌────────────┐
+    │ SUCCESS │      │  RE-PLAN   │
+    │ RESPOND │      │  ADJUST    │
+    └─────────┘      └──────┬─────┘
+                             │
+                             └──→ Back to EXECUTION
+```
 
 ---
 
-## Configuration Schema
+## AGEN Cell-Based Architecture
 
-Add to agent pool entries:
+### Specialized Agents
+
+#### 1. **Planner Agent**
+**Purpose**: Strategic planning and task decomposition
+**Model**: High-capability (GPT-5, Claude Opus 4.1, Claude Sonnet 4.5)
+**Inputs**: User request, context, targetVFS info
+**Outputs**: Structured execution plan
+
+**Plan Structure**:
+```json
+{
+  "request_id": "req-001",
+  "goal": "Add warning triangle when self_modify=true",
+  "target_context": "framework",
+  "steps": [
+    {
+      "id": "step-1",
+      "phase": "discovery",
+      "action": "search",
+      "params": {"query": "input prompt", "pattern": "*.go"},
+      "success_criteria": "Find files with prompt rendering"
+    },
+    {
+      "id": "step-2",
+      "phase": "analysis",
+      "action": "read_file",
+      "params": {"path": "code/alfa/internal/orchestrator/orchestrator.go"},
+      "depends_on": ["step-1"],
+      "success_criteria": "Understand prompt rendering logic"
+    },
+    {
+      "id": "step-3",
+      "phase": "implementation",
+      "action": "patch",
+      "params": {
+        "file": "code/alfa/internal/orchestrator/orchestrator.go",
+        "operations": [...]
+      },
+      "depends_on": ["step-2"],
+      "success_criteria": "Code modified to show warning icon"
+    },
+    {
+      "id": "step-4",
+      "phase": "validation",
+      "action": "run_tests",
+      "params": {"pattern": "./code/alfa/..."},
+      "depends_on": ["step-3"],
+      "success_criteria": "All tests pass"
+    }
+  ],
+  "overall_success": "Warning triangle displays when self_modify=true"
+}
+```
+
+#### 2. **Executor Agent**
+**Purpose**: Execute individual plan steps
+**Model**: Fast model (GPT-5-mini, Claude Sonnet)
+**Inputs**: Plan step, context
+**Outputs**: Execution results, observations
+
+**Responsibilities**:
+- Execute tool calls (read_file, patch, run_command, etc.)
+- Collect detailed results
+- Handle errors gracefully
+- Report back to Coordinator
+
+#### 3. **Verifier Agent**
+**Purpose**: Validate results and assess goal achievement
+**Model**: Analytical model (o1, Claude with extended thinking)
+**Inputs**: Plan, execution results, goal criteria
+**Outputs**: Verification report
+
+**Verification Checks**:
+```json
+{
+  "request_id": "req-001",
+  "verification": {
+    "goal_achieved": false,
+    "completed_steps": ["step-1", "step-2", "step-3"],
+    "failed_steps": ["step-4"],
+    "issues": [
+      {
+        "step_id": "step-4",
+        "issue": "Tests failed: compilation error in orchestrator.go:123",
+        "severity": "critical"
+      }
+    ],
+    "next_actions": [
+      {
+        "type": "fix",
+        "description": "Fix syntax error in added code",
+        "priority": "high"
+      }
+    ]
+  }
+}
+```
+
+#### 4. **Coordinator Agent**
+**Purpose**: Orchestrate PEV loop, manage state
+**Model**: Fast coordinator (GPT-5-mini)
+**Inputs**: All agent outputs
+**Outputs**: Orchestration decisions
+
+**Responsibilities**:
+- Trigger Planner for new request or re-plan
+- Schedule Executor for parallel/sequential tasks
+- Invoke Verifier after execution
+- Decide: continue, re-plan, or complete
+- Manage iteration limits (max 10 cycles)
+
+---
+
+## Cell Definition
+
+**File**: `workbench/config/cells/alfa/plan-execute-verify.yaml`
 
 ```yaml
-agents:
-  summary_generator:
-    type: summary_generator
-    ai_provider: anthropic
-    ai_model: claude-sonnet-4-5-20250929
-    token_budget:
-      enabled: true
-      safety_margin: 0.10
-      max_chunk_size: 150000  # tokens per chunk
-      chunk_overlap: 0.15     # 15% overlap for context
+cell:
+  id: "alfa:plan-execute-verify"
+  description: "Plan-Execute-Verify loop for intelligent code modification"
+  debug: true
+
+  orchestration:
+    startup_timeout: "30s"
+    shutdown_timeout: "15s"
+    max_retries: 3
+    retry_delay: "3s"
+
+  agents:
+    # Coordinator - Orchestrates the PEV loop
+    - id: "pev-coordinator-001"
+      agent_type: "pev-coordinator"
+      ingress: "sub:user-requests"
+      egress: "pub:pev-commands"
+      config:
+        max_iterations: 10
+        timeout_per_iteration: "5m"
+        model: "gpt-5-mini"
+
+    # Planner - Strategic planning
+    - id: "pev-planner-001"
+      agent_type: "pev-planner"
+      ingress: "sub:plan-requests"
+      egress: "pub:execution-plans"
+      dependencies: ["pev-coordinator-001"]
+      config:
+        model: "claude-sonnet-4-5-20250929"
+        temperature: 0.7
+        max_tokens: 64000
+        data_path: "./data/planner"
+
+    # Executor - Execute plan steps
+    - id: "pev-executor-001"
+      agent_type: "pev-executor"
+      ingress: "sub:execute-tasks"
+      egress: "pub:execution-results"
+      dependencies: ["pev-planner-001"]
+      config:
+        model: "gpt-5-mini"
+        temperature: 0
+        max_tokens: 128000
+        tools_enabled: true
+        data_path: "./data/executor"
+
+    # Verifier - Validate results
+    - id: "pev-verifier-001"
+      agent_type: "pev-verifier"
+      ingress: "sub:verify-requests"
+      egress: "pub:verification-reports"
+      dependencies: ["pev-executor-001"]
+      config:
+        model: "o1"
+        temperature: 0
+        max_tokens: 100000
+        strict_validation: true
+        data_path: "./data/verifier"
+
+    # Knowledge Store - Persistent state
+    - id: "pev-knowledge-001"
+      agent_type: "knowledge-store"
+      ingress: "sub:knowledge-ops"
+      egress: "pub:knowledge-results"
+      config:
+        data_path: "./data/pev-knowledge"
+        enable_graph: true
+        enable_search: true
 ```
 
-Add to cell configurations:
+---
 
-```yaml
-cells:
-  document_analysis:
-    chunking:
-      enabled: true
-      strategy: auto  # auto, json, text
-      max_payload_size: 1000000  # bytes
+## Communication Flow
+
+### Topics
+
+**Request Flow**:
+```
+user-requests        → Coordinator receives user input
+plan-requests        → Coordinator → Planner
+execution-plans      → Planner → Coordinator
+execute-tasks        → Coordinator → Executor
+execution-results    → Executor → Coordinator
+verify-requests      → Coordinator → Verifier
+verification-reports → Verifier → Coordinator
+pev-commands         → Coordinator → System
+knowledge-ops        → Any agent → Knowledge Store
+knowledge-results    → Knowledge Store → Any agent
+```
+
+### Message Formats
+
+**User Request**:
+```json
+{
+  "id": "req-001",
+  "type": "user_request",
+  "content": "modify your code to add warning icon when self_modify=true",
+  "context": {
+    "target_vfs": "framework",
+    "target_root": "/Users/kai/.../agen",
+    "self_modify_enabled": true
+  }
+}
+```
+
+**Execution Plan** (Planner → Coordinator):
+```json
+{
+  "id": "plan-001",
+  "request_id": "req-001",
+  "type": "execution_plan",
+  "plan": { ... }  // See Plan Structure above
+}
+```
+
+**Verification Report** (Verifier → Coordinator):
+```json
+{
+  "id": "verify-001",
+  "request_id": "req-001",
+  "type": "verification_report",
+  "goal_achieved": false,
+  "issues": [...],
+  "next_actions": [...]
+}
 ```
 
 ---
 
-## Backward Compatibility
+## Storage Strategy
 
-✅ **No Breaking Changes**:
+### OmniStore Usage
 
-- Chunking is opt-in via configuration
-- Non-chunked envelopes work as before
-- Agents without chunk support work normally
+Each agent uses OmniStore for:
 
-✅ **Graceful Degradation**:
+1. **KV Store**: Persist agent state, configuration
+2. **Graph Store**: Model relationships (requests → plans → steps → results)
+3. **Files Store**: Cache intermediate artifacts
+4. **Search**: Full-text search over plans, results
 
-- If token counting fails → send without chunking
-- If budget calculation errors → fallback to normal flow
-- Missing chunk timeouts handled gracefully
+**Graph Schema**:
+```
+(Request) -[:HAS_PLAN]→ (Plan)
+(Plan) -[:HAS_STEP]→ (Step)
+(Step) -[:EXECUTED_AS]→ (Execution)
+(Execution) -[:PRODUCED]→ (Result)
+(Result) -[:VERIFIED_BY]→ (Verification)
+(Verification) -[:TRIGGERS]→ (ReplanDecision)
+```
 
----
-
-## Testing Strategy
-
-### Unit Tests
-
-- Envelope token counting accuracy
-- Chunk splitting with various payload types
-- Chunk ordering and merging
-- Metadata preservation across chunks
-
-### Integration Tests
-
-- End-to-end chunked message flow
-- Multi-agent pipeline with large payloads
-- Timeout handling for incomplete chunks
-- Mixed chunked/non-chunked messages
-
-### Performance Tests
-
-- Overhead of token counting
-- Chunking/merging latency
-- Memory usage with many concurrent chunks
+**Benefits**:
+- Track full execution history
+- Analyze patterns (which approaches succeed)
+- Learn from failures (avoid repeating mistakes)
+- Provide explainability (why did it do X?)
 
 ---
 
-## Benefits
+## Model Selection Strategy
 
-1. **Automatic Handling**: Agents automatically handle large payloads
-2. **Transparent**: Works without agent code changes
-3. **Provider-Aware**: Uses correct token limits per AI provider
-4. **Fault Tolerant**: Graceful fallback if chunking fails
-5. **Observable**: Chunk IDs enable distributed tracing
+### Rationale for Different Models
 
----
+| Agent | Model | Reasoning |
+|-------|-------|-----------|
+| **Planner** | Claude Sonnet 4.5 / GPT-5 | Strategic thinking, task decomposition requires high capability |
+| **Executor** | GPT-5-mini / Claude Haiku | Fast execution, straightforward tool use, cost-effective for repetitive tasks |
+| **Verifier** | o1 / Claude Opus | Deep reasoning to validate results, catch subtle issues |
+| **Coordinator** | GPT-5-mini | Simple orchestration logic, low latency needed |
 
-## Open Questions
+### Cost-Performance Tradeoff
 
-1. **Chunk Timeout**: How long to wait for incomplete chunks? (Propose: 5 minutes)
-2. **Chunk Storage**: Keep chunks in memory or persist? (Propose: memory with size limits)
-3. **Retry Logic**: Retry sending if chunk delivery fails? (Propose: yes, with exponential backoff)
-4. **Deduplication**: Handle duplicate chunks? (Propose: yes, use chunk index)
-5. **Compression**: Compress chunks before sending? (Propose: optional, add later)
+**High-value operations** (planning, verification): Premium models
+**High-volume operations** (execution steps): Fast, cheap models
 
----
+**Example Cost Profile** (per request with 5 iterations):
+- Planner: 1-2 calls × $expensive = $X
+- Executor: 20-30 calls × $cheap = $Y << $X
+- Verifier: 5 calls × $expensive = $Z
+- Coordinator: 50 calls × $cheap = $W << $X
 
-## Risks & Mitigations
-
-**Risk**: Chunking adds latency
-**Mitigation**: Make opt-in, only for AI-powered agents with large payloads
-
-**Risk**: Chunk reassembly memory usage
-**Mitigation**: Set max concurrent chunks limit, timeout cleanup
-
-**Risk**: Chunk ordering issues
-**Mitigation**: Use explicit chunk index in headers, validate on merge
-
-**Risk**: Incomplete chunks blocking agents
-**Mitigation**: Timeout mechanism, log warnings, continue processing
+**Total**: Dominated by Planner + Verifier, but they're called rarely.
 
 ---
 
-## Next Steps
+## Integration with Alfa
 
-1. Review this concept with human collaborator
-2. Get approval for architecture approach
-3. Begin Step 1: Core Budget Integration
-4. Implement incrementally with tests
-5. Update documentation as we progress
+### Current Orchestrator Replacement
+
+**Before** (`orchestrator.go`):
+```go
+func (o *Orchestrator) processRequest(ctx context.Context, userInput string) error {
+    // Naive: AI → Actions → Execute → if(success) STOP
+    for iteration < maxIterations {
+        response := llm.Chat(messages)
+        actions := parseActions(response)
+        results := executeActions(actions)
+
+        if isComplete(results) {  // ← PROBLEM: stops on success
+            return nil
+        }
+    }
+}
+```
+
+**After** (PEV-enabled):
+```go
+func (o *Orchestrator) processRequest(ctx context.Context, userInput string) error {
+    // Publish request to PEV cell
+    request := &client.BrokerMessage{
+        ID: generateID(),
+        Payload: map[string]interface{}{
+            "content": userInput,
+            "context": o.getTargetContext(),  // framework vs project
+        },
+    }
+
+    // Publish to user-requests topic
+    o.cellBroker.Publish("user-requests", request)
+
+    // Subscribe to responses
+    responseChan := o.cellBroker.Subscribe("user-responses")
+
+    // Wait for completion (with timeout)
+    select {
+    case response := <-responseChan:
+        return o.handlePEVResponse(response)
+    case <-time.After(10 * time.Minute):
+        return fmt.Errorf("PEV timeout")
+    }
+}
+```
+
+### Alfa Becomes a Cell Orchestrator
+
+Instead of:
+- Alfa directly executing tools ❌
+
+We have:
+- Alfa orchestrates PEV cell ✅
+- PEV agents do the heavy lifting ✅
+- Alfa just publishes request and waits for result ✅
+
+---
+
+## Implementation Phases
+
+### Phase 1: Agent Skeletons (Week 1)
+- [x] Implement 4 specialized agents (Coordinator, Planner, Executor, Verifier)
+- [x] 3-method pattern (Init, ProcessMessage, Cleanup)
+- [x] Basic pub/sub communication
+- [x] No AI yet - hardcoded logic for testing
+
+### Phase 2: PEV Cell (Week 1-2)
+- [x] Create cell YAML definition
+- [x] Wire up pub/sub topics
+- [x] Test message flow with mock data
+- [x] Verify agents can start/stop
+
+### Phase 3: Planner Intelligence (Week 2)
+- [x] Integrate LLM (GPT-5)
+- [x] Implement plan generation from user request
+- [x] Store plans in OmniStore
+- [x] Test: Can it create valid plans?
+
+### Phase 4: Executor Tools (Week 2-3)
+- [x] Implement tool dispatcher in Executor
+- [x] Connect to existing alfa tools (read_file, patch, etc.)
+- [x] Execute plan steps sequentially
+- [x] Report results back
+
+### Phase 5: Verifier Logic (Week 3)
+- [x] Integrate analytical LLM (o1)
+- [x] Implement goal-checking logic
+- [x] Generate verification reports
+- [x] Decide: continue, re-plan, or done
+
+### Phase 6: Coordinator Loop (Week 3-4)
+- [x] Implement PEV loop orchestration
+- [x] Handle re-planning on failure
+- [x] Enforce iteration limits
+- [x] Graceful termination
+
+### Phase 7: Alfa Integration (Week 4)
+- [x] Replace naive loop with PEV cell invocation
+- [x] Pass targetVFS context to PEV
+- [x] Handle responses
+- [x] UI for showing progress
+
+### Phase 8: Knowledge Graph (Week 5)
+- [x] Model request → plan → execution graph
+- [x] Store in OmniStore KV + Search
+- [x] Query: "What worked last time for similar requests?"
+- [x] Learning from history (MVP complete)
+
+---
+
+## Success Criteria
+
+### Functional Requirements
+- ✅ Multi-step workflows complete automatically
+- ✅ Self-correction on errors
+- ✅ Iterates until goal achieved
+- ✅ Works for both framework and project modification
+- ✅ Handles complex requests (5+ steps)
+
+### Performance Requirements
+- Max 10 iterations per request
+- Response time: < 5 minutes for typical request
+- Cost: < $0.50 per request (average)
+
+### Quality Requirements
+- Code modifications pass tests before commit
+- Verification catches >90% of errors before user sees them
+- Clear explanation of what was done and why
+
+---
+
+## Example Scenario
+
+### Request
+```
+"Modify your code so that when self_modify=true,
+a warning triangle (⚠️) appears at the start of the input prompt"
+```
+
+### Execution Trace
+
+**Iteration 1**:
+
+1. **Planner** creates plan:
+   - Step 1: Search for "prompt" in orchestrator
+   - Step 2: Read orchestrator.go
+   - Step 3: Find getUserInput() function
+   - Step 4: Patch to add warning icon
+   - Step 5: Build and test
+
+2. **Executor** executes steps 1-4:
+   - Searches → finds orchestrator.go:217
+   - Reads file → understands prompt rendering
+   - Applies patch → adds `if allowSelfModify { fmt.Print("⚠️ ") }`
+   - Build succeeds
+
+3. **Verifier** checks results:
+   - ❌ "Warning only shows in text mode, not voice mode"
+   - Recommends: "Also check voice input handling"
+
+**Iteration 2** (Re-plan):
+
+1. **Planner** adjusts:
+   - Step 6: Check voice input code path
+   - Step 7: Patch voice prompt too
+
+2. **Executor** executes:
+   - Reads voice input code
+   - Patches both text and voice prompts
+
+3. **Verifier** checks:
+   - ✅ "Warning displays in both modes"
+   - ✅ "Tests pass"
+   - ✅ "Goal achieved"
+
+**Result**: Request complete in 2 iterations, 7 steps total.
+
+---
+
+## Advantages over Naive Approach
+
+| Aspect | Naive Loop | PEV Architecture |
+|--------|-----------|------------------|
+| **Planning** | None - reactive only | Explicit plan with steps |
+| **Execution** | Stops after first success | Continues until goal |
+| **Error Handling** | User sees errors | Self-correction via re-planning |
+| **Multi-step** | Requires AI to batch all actions | Natural sequential/parallel execution |
+| **Verification** | None | Explicit goal checking |
+| **Learning** | None | History stored in graph |
+| **Explainability** | "It ran search" | "Plan: search → read → patch → verify" |
+| **Cost** | Expensive model for everything | Right model for right task |
+
+---
+
+## Risks and Mitigations
+
+### Risk 1: Infinite Loops
+**Mitigation**: Hard limit of 10 iterations. Coordinator enforces.
+
+### Risk 2: Cost Explosion
+**Mitigation**: Use cheap models for high-volume (Executor). Monitor cost per request.
+
+### Risk 3: Complex State Management
+**Mitigation**: OmniStore handles all state. Single source of truth.
+
+### Risk 4: Latency
+**Mitigation**: Parallel execution where possible. Fast models for Executor.
+
+### Risk 5: Integration Complexity
+**Mitigation**: Phase implementation. Test each agent independently first.
+
+---
+
+## Future Enhancements
+
+### Phase 9: Meta-Learning
+- Analyze which plans succeed/fail
+- Extract patterns: "For requests like X, plan Y works best"
+- Auto-suggest plans based on history
+
+### Phase 10: Parallel Execution
+- Executor spawns multiple workers for independent steps
+- Dependency graph determines execution order
+
+### Phase 11: Human-in-the-Loop
+- Planner asks user to clarify ambiguous requests
+- Verifier requests user validation for critical changes
+
+### Phase 12: Multi-Agent Collaboration
+- Different Executors specialize (one for Go, one for YAML, etc.)
+- Coordinator routes steps to specialists
+
+---
+
+## Conclusion
+
+Plan-Execute-Verify transforms alfa from a naive tool-executor into an intelligent, goal-oriented system that:
+
+1. **Plans** before acting
+2. **Executes** methodically
+3. **Verifies** results
+4. **Iterates** until success
+
+By leveraging AGEN's cell/agent architecture, we get:
+- **Modularity**: Each agent has one job
+- **Scalability**: Add more agents as needed
+- **Maintainability**: Test agents independently
+- **Observability**: Track execution in graph store
+- **Cost-efficiency**: Right model for right task
+
+This architecture positions alfa as a true **agentic coding assistant** capable of handling complex, multi-step code modifications with minimal user intervention.
 
 ---
 
 ## References
 
-- Phase 1-3 implementation: `code/omni/tokencount/`, `code/omni/budget/`, `code/alfa/internal/orchestrator/`
-- Envelope structure: `code/cellorg/internal/envelope/envelope.go`
-- Agent framework: `code/cellorg/public/agent/framework.go`
-- Broker service: `code/cellorg/internal/broker/service.go`
+- **ReAct Pattern**: [react-lm.github.io](https://react-lm.github.io/)
+- **Claude Code Architecture**: [Anthropic Engineering Blog](https://www.anthropic.com/engineering/claude-code-best-practices)
+- **Agentic Workflows 2025**: [Weaviate Blog](https://weaviate.io/blog/what-are-agentic-workflows)
+- **AGEN Architecture**: `guidelines/references/architecture.md`
+- **Agent Patterns**: `guidelines/references/agent-patterns.md`
