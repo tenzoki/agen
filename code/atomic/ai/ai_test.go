@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tenzoki/agen/alfa/internal/ai"
+	"github.com/tenzoki/agen/atomic/ai"
 )
 
 func TestDefaultConfig(t *testing.T) {
