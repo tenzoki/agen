@@ -179,7 +179,10 @@ func (c *Config) LoadCells() (*CellsConfig, error) {
 
 			data, err := os.ReadFile(cellsFile)
 			if err != nil {
-				return nil, fmt.Errorf("failed to read cells file %s: %w", cellsFile, err)
+				if c.Debug {
+					fmt.Printf("[Config] Warning: Failed to read %s: %v\n", cellsFile, err)
+				}
+				continue // Skip this file and continue with next
 			}
 
 			// Handle multiple YAML documents separated by ---
@@ -192,7 +195,11 @@ func (c *Config) LoadCells() (*CellsConfig, error) {
 					if err.Error() == "EOF" {
 						break
 					}
-					return nil, fmt.Errorf("failed to parse cells file %s: %w", cellsFile, err)
+					// Skip files with parse errors but continue processing others
+					if c.Debug {
+						fmt.Printf("[Config] Warning: Failed to parse %s: %v\n", cellsFile, err)
+					}
+					break // Skip rest of this file, move to next
 				}
 				if cellDoc.Cell.ID != "" {
 					if c.Debug {
