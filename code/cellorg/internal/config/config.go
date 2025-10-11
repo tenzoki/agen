@@ -142,34 +142,45 @@ func (c *Config) LoadCells() (*CellsConfig, error) {
 		return &CellsConfig{}, nil
 	}
 
-	cellsFile := c.Cells[0]
-	if !filepath.IsAbs(cellsFile) {
-		if len(c.BaseDir) > 0 {
-			cellsFile = filepath.Join(c.BaseDir[0], cellsFile)
-		}
-	}
-
-	data, err := os.ReadFile(cellsFile)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read cells file %s: %w", cellsFile, err)
-	}
-
-	// Handle multiple YAML documents separated by ---
 	var cells []Cell
 
-	decoder := yaml.NewDecoder(bytes.NewReader(data))
-	for {
-		var cellDoc struct {
-			Cell Cell `yaml:"cell"`
-		}
-		if err := decoder.Decode(&cellDoc); err != nil {
-			if err.Error() == "EOF" {
-				break
+	// Process each cells pattern (supports globs)
+	for _, cellsPattern := range c.Cells {
+		if !filepath.IsAbs(cellsPattern) {
+			if len(c.BaseDir) > 0 {
+				cellsPattern = filepath.Join(c.BaseDir[0], cellsPattern)
 			}
-			return nil, fmt.Errorf("failed to parse cells file %s: %w", cellsFile, err)
 		}
-		if cellDoc.Cell.ID != "" {
-			cells = append(cells, cellDoc.Cell)
+
+		// Expand glob pattern
+		matches, err := filepath.Glob(cellsPattern)
+		if err != nil {
+			return nil, fmt.Errorf("invalid glob pattern %s: %w", cellsPattern, err)
+		}
+
+		// Load each matched file
+		for _, cellsFile := range matches {
+			data, err := os.ReadFile(cellsFile)
+			if err != nil {
+				return nil, fmt.Errorf("failed to read cells file %s: %w", cellsFile, err)
+			}
+
+			// Handle multiple YAML documents separated by ---
+			decoder := yaml.NewDecoder(bytes.NewReader(data))
+			for {
+				var cellDoc struct {
+					Cell Cell `yaml:"cell"`
+				}
+				if err := decoder.Decode(&cellDoc); err != nil {
+					if err.Error() == "EOF" {
+						break
+					}
+					return nil, fmt.Errorf("failed to parse cells file %s: %w", cellsFile, err)
+				}
+				if cellDoc.Cell.ID != "" {
+					cells = append(cells, cellDoc.Cell)
+				}
+			}
 		}
 	}
 
