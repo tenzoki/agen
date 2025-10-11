@@ -237,7 +237,7 @@ func DefaultConfig() AlfaConfig {
 			Image:   "golang:1.24-alpine",
 		},
 		Cellorg: CellorgConfig{
-			Enabled:    false,
+			Enabled:    true,
 			ConfigPath: "config",
 		},
 		Output: OutputConfig{
