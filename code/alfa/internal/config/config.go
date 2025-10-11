@@ -238,7 +238,7 @@ func DefaultConfig() AlfaConfig {
 		},
 		Cellorg: CellorgConfig{
 			Enabled:    true,
-			ConfigPath: "workbench/config",
+			ConfigPath: "config",
 		},
 		Output: OutputConfig{
 			CaptureEnabled: true,

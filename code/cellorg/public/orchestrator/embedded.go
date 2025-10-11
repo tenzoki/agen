@@ -92,15 +92,16 @@ func NewEmbedded(cfg Config) (*EmbeddedOrchestrator, error) {
 		subscribers: make(map[string][]chan Event),
 	}
 
-	// Load Gox configuration (gox.yaml)
-	goxConfigPath := cfg.ConfigPath + "/gox.yaml"
-	goxConfig, err := config.Load(goxConfigPath)
+	// Load Cellorg configuration (cellorg.yaml)
+	cellorgConfigPath := cfg.ConfigPath + "/cellorg.yaml"
+	cellorgConfig, err := config.Load(cellorgConfigPath)
 	if err != nil {
 		// Use defaults if config not found
 		if cfg.Debug {
-			fmt.Printf("[Gox Embedded] Warning: Could not load gox.yaml: %v, using defaults\n", err)
+			fmt.Printf("[Cellorg Embedded] Warning: Could not load cellorg.yaml: %v, using defaults\n", err)
 		}
-		goxConfig = &config.Config{
+		cellorgConfig = &config.Config{
+			Debug:   cfg.Debug,
 			Support: config.SupportConfig{Port: cfg.SupportPort},
 			Broker:  config.BrokerConfig{Port: cfg.BrokerPort},
 			BaseDir: []string{cfg.ConfigPath},
@@ -108,30 +109,30 @@ func NewEmbedded(cfg Config) (*EmbeddedOrchestrator, error) {
 			Cells:   []string{"cells.yaml"},
 		}
 	}
-	eo.goxConfig = goxConfig
+	eo.goxConfig = cellorgConfig
 
 	// Load pool configuration
-	poolConfig, err := goxConfig.LoadPool()
+	poolConfig, err := cellorgConfig.LoadPool()
 	if err != nil {
 		if cfg.Debug {
-			fmt.Printf("[Gox Embedded] Warning: Could not load pool.yaml: %v\n", err)
+			fmt.Printf("[Cellorg Embedded] Warning: Could not load pool.yaml: %v\n", err)
 		}
 	}
 	eo.poolConfig = poolConfig
 
 	// Load cells configuration
-	cellsConfig, err := goxConfig.LoadCells()
+	cellsConfig, err := cellorgConfig.LoadCells()
 	if err != nil {
 		if cfg.Debug {
-			fmt.Printf("[Gox Embedded] Warning: Could not load cells.yaml: %v\n", err)
+			fmt.Printf("[Cellorg Embedded] Warning: Could not load cells: %v\n", err)
 		}
 	}
 	eo.cellsConfig = cellsConfig
 
 	if cfg.Debug && cellsConfig != nil {
-		fmt.Printf("[Gox Embedded] Loaded %d cells:\n", len(cellsConfig.Cells))
+		fmt.Printf("[Cellorg Embedded] Loaded %d cells:\n", len(cellsConfig.Cells))
 		for _, cell := range cellsConfig.Cells {
-			fmt.Printf("[Gox Embedded]   - %s (%d agents)\n", cell.ID, len(cell.Agents))
+			fmt.Printf("[Cellorg Embedded]   - %s (%d agents)\n", cell.ID, len(cell.Agents))
 		}
 	}
 

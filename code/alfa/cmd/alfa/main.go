@@ -337,8 +337,10 @@ func main() {
 	var cellMgr *cellorchestrator.EmbeddedOrchestrator
 	if cfg.Cellorg.Enabled {
 		fmt.Println("🔧 Initializing cellorg advanced features...")
+		// ConfigPath should be absolute path to config directory
+		cellorgConfigPath := filepath.Join(workbenchDir, cfg.Cellorg.ConfigPath)
 		cellMgr, err = cellorchestrator.NewEmbedded(cellorchestrator.Config{
-			ConfigPath:      cfg.Cellorg.ConfigPath,
+			ConfigPath:      cellorgConfigPath,
 			DefaultDataRoot: workbenchDir,
 			Debug:           true,
 		})
