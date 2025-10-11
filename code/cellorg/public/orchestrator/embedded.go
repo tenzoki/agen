@@ -128,6 +128,13 @@ func NewEmbedded(cfg Config) (*EmbeddedOrchestrator, error) {
 	}
 	eo.cellsConfig = cellsConfig
 
+	if cfg.Debug && cellsConfig != nil {
+		fmt.Printf("[Gox Embedded] Loaded %d cells:\n", len(cellsConfig.Cells))
+		for _, cell := range cellsConfig.Cells {
+			fmt.Printf("[Gox Embedded]   - %s (%d agents)\n", cell.ID, len(cell.Agents))
+		}
+	}
+
 	// Start embedded services (Phase 3)
 	eo.servicesReady = make(chan struct{})
 

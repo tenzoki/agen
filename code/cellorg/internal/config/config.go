@@ -146,6 +146,7 @@ func (c *Config) LoadCells() (*CellsConfig, error) {
 
 	// Process each cells pattern (supports globs)
 	for _, cellsPattern := range c.Cells {
+		originalPattern := cellsPattern
 		if !filepath.IsAbs(cellsPattern) {
 			if len(c.BaseDir) > 0 {
 				cellsPattern = filepath.Join(c.BaseDir[0], cellsPattern)
@@ -158,8 +159,16 @@ func (c *Config) LoadCells() (*CellsConfig, error) {
 			return nil, fmt.Errorf("invalid glob pattern %s: %w", cellsPattern, err)
 		}
 
+		if c.Debug {
+			fmt.Printf("[Config] Pattern '%s' -> '%s' matched %d files\n", originalPattern, cellsPattern, len(matches))
+		}
+
 		// Load each matched file
 		for _, cellsFile := range matches {
+			if c.Debug {
+				fmt.Printf("[Config] Loading cell file: %s\n", cellsFile)
+			}
+
 			data, err := os.ReadFile(cellsFile)
 			if err != nil {
 				return nil, fmt.Errorf("failed to read cells file %s: %w", cellsFile, err)
@@ -178,6 +187,9 @@ func (c *Config) LoadCells() (*CellsConfig, error) {
 					return nil, fmt.Errorf("failed to parse cells file %s: %w", cellsFile, err)
 				}
 				if cellDoc.Cell.ID != "" {
+					if c.Debug {
+						fmt.Printf("[Config]   Found cell: %s\n", cellDoc.Cell.ID)
+					}
 					cells = append(cells, cellDoc.Cell)
 				}
 			}

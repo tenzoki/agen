@@ -22,9 +22,9 @@ broker:
   codec: "json"
   debug: true
 
-# Base directory for relative paths
+# Base directory for relative paths (relative to ConfigPath)
 basedir:
-  - "workbench/config"
+  - "."
 
 # Agent type definitions
 pool:
