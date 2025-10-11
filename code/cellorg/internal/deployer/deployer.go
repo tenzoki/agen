@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -238,13 +239,18 @@ func (d *AgentDeployer) verifyAgentStarted(agentID string) error {
 
 // getBinaryPath determines the actual binary path for an agent type
 func (d *AgentDeployer) getBinaryPath(typeConfig config.AgentTypeConfig) string {
-	// The binary field in config/pool.yaml contains the source path (e.g., agents/file_ingester/main.go)
-	// We need to map this to the actual built binary (e.g., build/file_ingester)
+	// The binary field in config/pool.yaml can be:
+	// 1. A direct binary path (e.g., "../../bin/pev-coordinator")
+	// 2. A source path to be mapped (e.g., "agents/file_ingester/main.go")
 
-	// Extract the agent name from the path
 	binaryPath := typeConfig.Binary
 
-	// Map source paths to built binaries
+	// If it's already a direct binary path (absolute, or starts with ./ or ../), use it directly
+	if filepath.IsAbs(binaryPath) || strings.HasPrefix(binaryPath, "./") || strings.HasPrefix(binaryPath, "../") {
+		return binaryPath
+	}
+
+	// Map source paths to built binaries (legacy support)
 	if binaryPath == "agents/file_ingester/main.go" {
 		return "./build/file_ingester"
 	} else if binaryPath == "agents/text_transformer/main.go" {
