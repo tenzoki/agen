@@ -23,11 +23,11 @@
 agents:
   document_analyzer:
     type: document_analyzer
-    description: "Analyzes large documents using Claude"
+    description: "Analyzes large documents using GPT-5"
 
     # AI Provider configuration
-    ai_provider: anthropic
-    ai_model: claude-sonnet-4-5-20250929
+    ai_provider: openai
+    ai_model: gpt-5
 
     # Token budget configuration (optional)
     # If not specified, uses model defaults from omni/tokencount
@@ -85,8 +85,8 @@ agents:
     # The framework will automatically chunk outgoing envelopes
     downstream_agents:
       - destination: document_analyzer
-        provider: anthropic
-        model: claude-sonnet-4-5-20250929
+        provider: openai
+        model: gpt-5
       - destination: text_summarizer
         provider: openai
         model: gpt-5
@@ -123,11 +123,11 @@ agents:
 #     defer envFramework.Close()
 #
 #     // Register AI providers for automatic chunking
-#     anthropicCounter, _ := tokencount.NewCounter(tokencount.Config{
-#         Provider: "anthropic",
-#         Model:    "claude-sonnet-4-5-20250929",
+#     openaiCounter, _ := tokencount.NewCounter(tokencount.Config{
+#         Provider: "openai",
+#         Model:    "gpt-5",
 #     })
-#     envFramework.RegisterProvider("document_analyzer", anthropicCounter)
+#     envFramework.RegisterProvider("document_analyzer", openaiCounter)
 #
 #     // Subscribe to topic with automatic chunk reassembly
 #     envelopes, _ := envFramework.Subscribe("input-topic")
@@ -174,22 +174,6 @@ agents:
 # Configuration here is for reference only
 
 provider_limits:
-  anthropic:
-    claude-sonnet-4-5-20250929:
-      max_context: 200000
-      max_output: 64000
-      default_reserve: 1000
-
-    claude-opus-4-1-20250805:
-      max_context: 200000
-      max_output: 32000
-      default_reserve: 1000
-
-    claude-sonnet-4-20250514:
-      max_context: 200000
-      max_output: 64000
-      default_reserve: 1000
-
   openai:
     gpt-5:
       max_context: 272000
