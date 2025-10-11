@@ -111,39 +111,10 @@ func DefaultConfig() AlfaConfig {
 			Project: "",
 		},
 		AI: AIConfig{
-			Provider:      "anthropic",
-			SelectedModel: "", // Uses provider's default_model
+			Provider:      "openai",
+			SelectedModel: "gpt-5",
 			ConfigFile:    "", // Will use workbench/config/ai-config.json by default
 			Providers: map[string]ProviderConfig{
-				"anthropic": {
-					DefaultModel: "claude-3-5-sonnet-20241022",
-					Models: map[string]ModelConfig{
-						"claude-3-5-sonnet-20241022": {
-							MaxTokens:   4096,
-							Temperature: 1.0,
-							Timeout:     60 * time.Second,
-							RetryCount:  3,
-							RetryDelay:  1 * time.Second,
-							Description: "Most intelligent model, balanced performance",
-						},
-						"claude-3-opus-20240229": {
-							MaxTokens:   4096,
-							Temperature: 1.0,
-							Timeout:     60 * time.Second,
-							RetryCount:  3,
-							RetryDelay:  1 * time.Second,
-							Description: "Powerful model for complex tasks",
-						},
-						"claude-3-sonnet-20240229": {
-							MaxTokens:   4096,
-							Temperature: 1.0,
-							Timeout:     60 * time.Second,
-							RetryCount:  3,
-							RetryDelay:  1 * time.Second,
-							Description: "Balanced model for most tasks",
-						},
-					},
-				},
 				"openai": {
 					DefaultModel: "gpt-5",
 					Models: map[string]ModelConfig{
