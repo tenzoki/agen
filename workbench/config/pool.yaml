@@ -568,7 +568,7 @@ pool:
 
     # Plan-Execute-Verify (PEV) Agents for alfa self-modification
     - agent_type: "pev-coordinator"
-      binary: "bin/pev-coordinator"
+      binary: "../../bin/pev-coordinator"
       operator: "spawn"
       capabilities: ["orchestration", "workflow-management", "iteration-control"]
       description: "Coordinates Plan-Execute-Verify loop for alfa code modifications"
@@ -577,7 +577,7 @@ pool:
         timeout_per_iteration: 300000000000  # 5m
 
     - agent_type: "pev-planner"
-      binary: "bin/pev-planner"
+      binary: "../../bin/pev-planner"
       operator: "spawn"
       capabilities: ["planning", "strategy", "goal-decomposition"]
       description: "Creates execution plans for code modification requests"
@@ -587,7 +587,7 @@ pool:
         max_tokens: 64000
 
     - agent_type: "pev-executor"
-      binary: "bin/pev-executor"
+      binary: "../../bin/pev-executor"
       operator: "spawn"
       capabilities: ["execution", "tool-invocation", "file-operations"]
       description: "Executes plan steps using available tools"
@@ -598,7 +598,7 @@ pool:
         tools_enabled: true
 
     - agent_type: "pev-verifier"
-      binary: "bin/pev-verifier"
+      binary: "../../bin/pev-verifier"
       operator: "spawn"
       capabilities: ["verification", "testing", "quality-assurance"]
       description: "Verifies execution results and validates goal achievement"
@@ -609,7 +609,7 @@ pool:
         strict_validation: true
 
     - agent_type: "pev-knowledge"
-      binary: "bin/pev-knowledge"
+      binary: "../../bin/pev-knowledge"
       operator: "spawn"
       capabilities: ["knowledge-storage", "history-tracking", "learning"]
       description: "Records PEV workflow history and provides similarity queries"
