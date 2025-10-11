@@ -582,7 +582,7 @@ pool:
       capabilities: ["planning", "strategy", "goal-decomposition"]
       description: "Creates execution plans for code modification requests"
       config_defaults:
-        model: "claude-sonnet-4-5-20250929"
+        model: "gpt-5"
         temperature: 0.7
         max_tokens: 64000
 
