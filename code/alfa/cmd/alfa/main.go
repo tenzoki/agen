@@ -339,6 +339,8 @@ func main() {
 		fmt.Println("🔧 Initializing cellorg advanced features...")
 		// ConfigPath should be absolute path to config directory
 		cellorgConfigPath := filepath.Join(workbenchDir, cfg.Cellorg.ConfigPath)
+		fmt.Printf("   ConfigPath: %s\n", cellorgConfigPath)
+		fmt.Printf("   Looking for: %s/cellorg.yaml\n", cellorgConfigPath)
 		cellMgr, err = cellorchestrator.NewEmbedded(cellorchestrator.Config{
 			ConfigPath:      cellorgConfigPath,
 			DefaultDataRoot: workbenchDir,

@@ -79,6 +79,14 @@ func Load(filename string) (*Config, error) {
 		return nil, fmt.Errorf("failed to parse config file: %w", err)
 	}
 
+	// Resolve basedir relative to config file directory
+	configDir := filepath.Dir(filename)
+	for i, basedir := range config.BaseDir {
+		if !filepath.IsAbs(basedir) {
+			config.BaseDir[i] = filepath.Join(configDir, basedir)
+		}
+	}
+
 	// Set defaults
 	if config.Support.Port == "" {
 		config.Support.Port = ":9000"
