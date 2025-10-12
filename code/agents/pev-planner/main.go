@@ -56,7 +56,7 @@ type PlanStep struct {
 func NewPEVPlanner() *PEVPlanner {
 	return &PEVPlanner{
 		DefaultAgentRunner: agent.DefaultAgentRunner{},
-		model:              "claude-sonnet-4-5-20250929",
+		model:              "gpt-5",
 		temperature:        0.7,
 	}
 }

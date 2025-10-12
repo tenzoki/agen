@@ -17,16 +17,8 @@ type ConfigFile struct {
 // DefaultConfig returns a default configuration
 func DefaultConfig() ConfigFile {
 	return ConfigFile{
-		DefaultProvider: "anthropic",
+		DefaultProvider: "openai",
 		Providers: map[string]Config{
-			"anthropic": {
-				Model:       "claude-3-5-sonnet-20241022",
-				MaxTokens:   4096,
-				Temperature: 1.0,
-				Timeout:     60 * time.Second,
-				RetryCount:  3,
-				RetryDelay:  1 * time.Second,
-			},
 			"openai": {
 				Model:       "gpt-5",
 				MaxTokens:   128000,

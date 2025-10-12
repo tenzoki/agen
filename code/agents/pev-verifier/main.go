@@ -69,7 +69,7 @@ type NextAction struct {
 func NewPEVVerifier() *PEVVerifier {
 	return &PEVVerifier{
 		DefaultAgentRunner: agent.DefaultAgentRunner{},
-		model:              "claude-opus-4-20250514",
+		model:              "o1",
 		strictValidation:   true,
 		temperature:        0.3,
 	}
@@ -107,7 +107,7 @@ func (v *PEVVerifier) createLLMClient() (ai.LLM, error) {
 	} else if strings.Contains(modelLower, "gpt") || strings.Contains(modelLower, "o1") {
 		provider = "openai"
 	} else {
-		provider = "anthropic" // Default to Anthropic for verification
+		provider = "openai" // Default to OpenAI
 	}
 
 	config := ai.Config{
