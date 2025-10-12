@@ -210,8 +210,16 @@ func main() {
 	// Wait for services to be fully ready before agent deployment
 	time.Sleep(500 * time.Millisecond)
 
+	// Determine framework root for resolving binary paths
+	// BaseDir is typically the config directory (workbench/config)
+	frameworkRoot := "."
+	if len(cfg.BaseDir) > 0 {
+		// BaseDir is config directory, framework root is two levels up
+		frameworkRoot = filepath.Dir(filepath.Dir(cfg.BaseDir[0]))
+	}
+
 	// Create agent deployer that manages agent lifecycle and process spawning
-	agentDeployer := deployer.NewAgentDeployer("localhost"+cfg.Support.Port, cfg.Debug)
+	agentDeployer := deployer.NewAgentDeployer("localhost"+cfg.Support.Port, frameworkRoot, cfg.Debug)
 
 	// Load pool configuration (agent type definitions) and register with support service
 	var poolConfig *config.PoolConfig

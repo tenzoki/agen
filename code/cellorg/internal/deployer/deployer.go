@@ -17,6 +17,7 @@ import (
 // AgentDeployer manages agent deployment with different strategies
 type AgentDeployer struct {
 	supportAddress string
+	frameworkRoot  string                            // Framework root for resolving binary paths
 	poolConfig     map[string]config.AgentTypeConfig // agent_type -> config
 	processes      map[string]*exec.Cmd              // agent_id -> process
 	processMux     sync.RWMutex
@@ -24,9 +25,10 @@ type AgentDeployer struct {
 }
 
 // NewAgentDeployer creates a new agent deployer
-func NewAgentDeployer(supportAddress string, debug bool) *AgentDeployer {
+func NewAgentDeployer(supportAddress string, frameworkRoot string, debug bool) *AgentDeployer {
 	return &AgentDeployer{
 		supportAddress: supportAddress,
+		frameworkRoot:  frameworkRoot,
 		poolConfig:     make(map[string]config.AgentTypeConfig),
 		processes:      make(map[string]*exec.Cmd),
 		debug:          debug,
@@ -240,31 +242,43 @@ func (d *AgentDeployer) verifyAgentStarted(agentID string) error {
 // getBinaryPath determines the actual binary path for an agent type
 func (d *AgentDeployer) getBinaryPath(typeConfig config.AgentTypeConfig) string {
 	// The binary field in config/pool.yaml can be:
-	// 1. A direct binary path (e.g., "../../bin/pev-coordinator")
-	// 2. A source path to be mapped (e.g., "agents/file_ingester/main.go")
+	// 1. Absolute path: /full/path/to/binary
+	// 2. Relative to framework root: ../../bin/pev-coordinator (from config dir)
+	// 3. Legacy source path: agents/file_ingester/main.go
 
 	binaryPath := typeConfig.Binary
 
-	// If it's already a direct binary path (absolute, or starts with ./ or ../), use it directly
-	if filepath.IsAbs(binaryPath) || strings.HasPrefix(binaryPath, "./") || strings.HasPrefix(binaryPath, "../") {
+	// If it's an absolute path, use it directly
+	if filepath.IsAbs(binaryPath) {
 		return binaryPath
+	}
+
+	// If it starts with ./ or ../, resolve relative to framework root
+	// (Paths in pool.yaml are relative to the config directory, which is workbench/config)
+	if strings.HasPrefix(binaryPath, "./") || strings.HasPrefix(binaryPath, "../") {
+		// Config is at frameworkRoot/workbench/config/pool.yaml
+		// Binary paths like ../../bin/pev-coordinator should resolve relative to config dir
+		configDir := filepath.Join(d.frameworkRoot, "workbench", "config")
+		absPath := filepath.Join(configDir, binaryPath)
+		absPath = filepath.Clean(absPath)
+		return absPath
 	}
 
 	// Map source paths to built binaries (legacy support)
 	if binaryPath == "agents/file_ingester/main.go" {
-		return "./build/file_ingester"
+		return filepath.Join(d.frameworkRoot, "build", "file_ingester")
 	} else if binaryPath == "agents/text_transformer/main.go" {
-		return "./build/text_transformer"
+		return filepath.Join(d.frameworkRoot, "build", "text_transformer")
 	} else if binaryPath == "agents/file_writer/main.go" {
-		return "./build/file_writer"
+		return filepath.Join(d.frameworkRoot, "build", "file_writer")
 	} else if binaryPath == "agents/adapter/main.go" {
-		return "./build/adapter"
+		return filepath.Join(d.frameworkRoot, "build", "adapter")
 	}
 
 	// Fallback: try to derive from binary path
 	dir := filepath.Dir(binaryPath)
 	base := filepath.Base(dir)
-	return filepath.Join("./build", base)
+	return filepath.Join(d.frameworkRoot, "build", base)
 }
 
 // StopAgent stops a deployed agent

@@ -3,6 +3,7 @@ package orchestrator
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -190,7 +191,9 @@ func NewEmbedded(cfg Config) (*EmbeddedOrchestrator, error) {
 
 	// Create agent deployer (connects to embedded services)
 	supportAddress := "localhost" + cfg.SupportPort
-	eo.agentDeployer = deployer.NewAgentDeployer(supportAddress, cfg.Debug)
+	// Determine framework root from ConfigPath (ConfigPath is workbench/config)
+	frameworkRoot := filepath.Dir(filepath.Dir(cfg.ConfigPath))
+	eo.agentDeployer = deployer.NewAgentDeployer(supportAddress, frameworkRoot, cfg.Debug)
 
 	// Load pool config into deployer
 	if poolConfig != nil {
