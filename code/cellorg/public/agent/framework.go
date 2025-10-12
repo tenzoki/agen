@@ -72,40 +72,40 @@ func (f *AgentFramework) Run() error {
 func (f *AgentFramework) initializeBaseAgent() error {
 	debug := GetDebugFromEnv()
 
-	// For standalone agents, GOX hostname must be explicitly specified
+	// For standalone agents, cellorg hostname must be explicitly specified
 	// Priority: command line args > environment variables
-	var goxHost string
+	var cellorgHost string
 	var configFlag *string
 
 	// Check command line arguments first (highest priority)
 	var agentIDPtr *string
 	if !flag.Parsed() {
 		// Define the flags if they haven't been parsed yet
-		goxHostPtr := flag.String("gox-host", "", "GOX hostname (e.g., localhost)")
+		cellorgHostPtr := flag.String("cellorg-host", "", "Cellorg hostname (e.g., localhost)")
 		agentIDPtr = flag.String("agent-id", "", "Agent ID to match cell configuration (e.g., file-ingester-demo-001)")
 		configFlag = flag.String("config", "", "Configuration file path")
 		flag.Parse()
-		if goxHostPtr != nil && *goxHostPtr != "" {
-			goxHost = *goxHostPtr
+		if cellorgHostPtr != nil && *cellorgHostPtr != "" {
+			cellorgHost = *cellorgHostPtr
 		}
 	}
 
 	// If not provided via command line, check environment variables
-	if goxHost == "" {
-		goxHost = GetEnvConfig("HOST", "")
-		if goxHost == "" {
-			// Check for legacy environment variables
-			goxHost = GetEnvConfig("GOX_HOST", "")
+	if cellorgHost == "" {
+		cellorgHost = GetEnvConfig("HOST", "")
+		if cellorgHost == "" {
+			// Check for legacy environment variables (GOX_HOST for backward compatibility)
+			cellorgHost = GetEnvConfig("GOX_HOST", "")
 		}
 	}
 
 	// If still empty, use localhost as default
-	if goxHost == "" {
-		goxHost = "localhost"
+	if cellorgHost == "" {
+		cellorgHost = "localhost"
 	}
 
 	// Support service uses port 9000 (hardcoded)
-	supportAddr := goxHost + ":9000"
+	supportAddr := cellorgHost + ":9000"
 
 	agentType := GetAgentType(f.agentType)
 
@@ -210,14 +210,14 @@ func (f *AgentFramework) setupConnections() error {
 	egress := f.baseAgent.GetConfigString("egress", "")
 
 	if ingress == "" {
-		f.baseAgent.LogError("No ingress configuration received from GOX. Agent is waiting for configuration from GOX at %s", f.baseAgent.GetSupportAddress())
-		f.baseAgent.LogError("Ensure GOX is running and this agent is properly defined in cells.yaml")
-		return fmt.Errorf("missing ingress configuration from GOX")
+		f.baseAgent.LogError("No ingress configuration received from cellorg. Agent is waiting for configuration from cellorg at %s", f.baseAgent.GetSupportAddress())
+		f.baseAgent.LogError("Ensure cellorg is running and this agent is properly defined in cells.yaml")
+		return fmt.Errorf("missing ingress configuration from cellorg")
 	}
 	if egress == "" {
-		f.baseAgent.LogError("No egress configuration received from GOX. Agent is waiting for configuration from GOX at %s", f.baseAgent.GetSupportAddress())
-		f.baseAgent.LogError("Ensure GOX is running and this agent is properly defined in cells.yaml")
-		return fmt.Errorf("missing egress configuration from GOX")
+		f.baseAgent.LogError("No egress configuration received from cellorg. Agent is waiting for configuration from cellorg at %s", f.baseAgent.GetSupportAddress())
+		f.baseAgent.LogError("Ensure cellorg is running and this agent is properly defined in cells.yaml")
+		return fmt.Errorf("missing egress configuration from cellorg")
 	}
 
 	f.baseAgent.LogInfo("Using ingress: %s, egress: %s", ingress, egress)

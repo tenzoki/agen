@@ -12,6 +12,9 @@ import (
 
 // AlfaConfig represents the complete alfa configuration
 type AlfaConfig struct {
+	// Debug mode (enables verbose logging)
+	Debug bool `yaml:"debug" json:"debug"`
+
 	// Workbench configuration
 	Workbench WorkbenchConfig `yaml:"workbench" json:"workbench"`
 
@@ -106,6 +109,7 @@ type SelfModifyConfig struct {
 // DefaultConfig returns the default alfa configuration
 func DefaultConfig() AlfaConfig {
 	return AlfaConfig{
+		Debug: false, // Debug mode disabled by default
 		Workbench: WorkbenchConfig{
 			Path:    "workbench",
 			Project: "",

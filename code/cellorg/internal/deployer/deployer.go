@@ -105,17 +105,17 @@ func (d *AgentDeployer) spawnAgentWithEnv(ctx context.Context, cellAgent config.
 
 	// Set environment variables for the agent
 	env := os.Environ()
-	env = append(env, fmt.Sprintf("GOX_AGENT_ID=%s", cellAgent.ID))
-	env = append(env, fmt.Sprintf("GOX_AGENT_TYPE=%s", cellAgent.AgentType))
-	env = append(env, fmt.Sprintf("GOX_SUPPORT_ADDRESS=%s", d.supportAddress))
-	env = append(env, fmt.Sprintf("GOX_DEBUG=%v", d.debug))
+	env = append(env, fmt.Sprintf("CELLORG_AGENT_ID=%s", cellAgent.ID))
+	env = append(env, fmt.Sprintf("CELLORG_AGENT_TYPE=%s", cellAgent.AgentType))
+	env = append(env, fmt.Sprintf("CELLORG_SUPPORT_ADDRESS=%s", d.supportAddress))
+	env = append(env, fmt.Sprintf("CELLORG_DEBUG=%v", d.debug))
 
 	// Add ingress/egress to environment
 	if cellAgent.Ingress != "" {
-		env = append(env, fmt.Sprintf("GOX_INGRESS=%s", cellAgent.Ingress))
+		env = append(env, fmt.Sprintf("CELLORG_INGRESS=%s", cellAgent.Ingress))
 	}
 	if cellAgent.Egress != "" {
-		env = append(env, fmt.Sprintf("GOX_EGRESS=%s", cellAgent.Egress))
+		env = append(env, fmt.Sprintf("CELLORG_EGRESS=%s", cellAgent.Egress))
 	}
 
 	// Apply custom environment variables (for embedded orchestrator)
@@ -189,7 +189,7 @@ func (d *AgentDeployer) callAgentWithEnv(ctx context.Context, cellAgent config.C
 
 // awaitAgent waits for an external agent to connect
 func (d *AgentDeployer) awaitAgent(ctx context.Context, cellAgent config.CellAgent, typeConfig config.AgentTypeConfig) error {
-	log.Printf("Awaiting external agent %s to connect (start with: GOX_AGENT_ID=%s ./build/%s)",
+	log.Printf("Awaiting external agent %s to connect (start with: CELLORG_AGENT_ID=%s ./build/%s)",
 		cellAgent.ID, cellAgent.ID, cellAgent.AgentType)
 
 	// Set a timeout for waiting

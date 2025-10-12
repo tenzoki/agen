@@ -11,9 +11,10 @@ import (
 	"github.com/tenzoki/agen/cellorg/internal/config"
 	"github.com/tenzoki/agen/cellorg/internal/deployer"
 	"github.com/tenzoki/agen/cellorg/internal/support"
+	"github.com/tenzoki/agen/cellorg/public/client"
 )
 
-// EmbeddedOrchestrator runs Gox orchestrator in-process
+// EmbeddedOrchestrator runs cellorg orchestrator in-process
 //
 // Phase 2 implementation with actual agent deployment.
 //
@@ -24,20 +25,21 @@ import (
 // - Actual agent deployment via internal deployer
 // - Configuration loading from cells.yaml
 type EmbeddedOrchestrator struct {
-	config        Config
-	eventBridge   *EventBridge
-	cells         map[string]*RunningCell
-	cellsMutex    sync.RWMutex
-	ctx           context.Context
-	cancel        context.CancelFunc
-	agentDeployer *deployer.AgentDeployer
-	goxConfig     *config.Config
-	cellsConfig   *config.CellsConfig
-	poolConfig    *config.PoolConfig
+	config         Config
+	eventBridge    *EventBridge
+	cells          map[string]*RunningCell
+	cellsMutex     sync.RWMutex
+	ctx            context.Context
+	cancel         context.CancelFunc
+	agentDeployer  *deployer.AgentDeployer
+	cellorgConfig  *config.Config
+	cellsConfig    *config.CellsConfig
+	poolConfig     *config.PoolConfig
 
 	// Embedded services (Phase 3)
 	supportService *support.Service
 	brokerService  *broker.Service
+	brokerClient   *client.BrokerClient
 	servicesReady  chan struct{}
 }
 
@@ -55,7 +57,7 @@ type RunningCell struct {
 //
 // This creates an orchestrator instance that manages:
 // - Cell lifecycle state
-// - Event bridging (Gox topics → Go channels)
+// - Event bridging (cellorg topics → Go channels)
 // - VFS root tracking per project
 // - Agent deployment via internal deployer
 // - Configuration loading from cells.yaml and pool.yaml
@@ -68,7 +70,7 @@ func NewEmbedded(cfg Config) (*EmbeddedOrchestrator, error) {
 		cfg.ConfigPath = "./config"
 	}
 	if cfg.DefaultDataRoot == "" {
-		cfg.DefaultDataRoot = "/var/lib/gox"
+		cfg.DefaultDataRoot = "/var/lib/cellorg"
 	}
 	if cfg.SupportPort == "" {
 		cfg.SupportPort = ":9000"
@@ -110,7 +112,7 @@ func NewEmbedded(cfg Config) (*EmbeddedOrchestrator, error) {
 			Cells:   []string{"cells.yaml"},
 		}
 	}
-	eo.goxConfig = cellorgConfig
+	eo.cellorgConfig = cellorgConfig
 
 	// Load pool configuration
 	poolConfig, err := cellorgConfig.LoadPool()
@@ -151,7 +153,7 @@ func NewEmbedded(cfg Config) (*EmbeddedOrchestrator, error) {
 		// Convert pool config to the format support service expects
 		poolPath := fmt.Sprintf("%s/pool.yaml", cfg.ConfigPath)
 		if err := eo.supportService.LoadAgentTypesFromFile(poolPath); err != nil && cfg.Debug {
-			fmt.Printf("[Gox Embedded] Warning: Could not load agent types: %v\n", err)
+			fmt.Printf("[Cellorg Embedded] Warning: Could not load agent types: %v\n", err)
 		}
 	}
 
@@ -169,19 +171,19 @@ func NewEmbedded(cfg Config) (*EmbeddedOrchestrator, error) {
 	// Start services as goroutines
 	go func() {
 		if cfg.Debug {
-			fmt.Println("[Gox Embedded] Starting support service...")
+			fmt.Println("[Cellorg Embedded] Starting support service...")
 		}
 		if err := eo.supportService.Start(eo.ctx); err != nil && eo.ctx.Err() == nil {
-			fmt.Printf("[Gox Embedded] Support service error: %v\n", err)
+			fmt.Printf("[Cellorg Embedded] Support service error: %v\n", err)
 		}
 	}()
 
 	go func() {
 		if cfg.Debug {
-			fmt.Println("[Gox Embedded] Starting broker service...")
+			fmt.Println("[Cellorg Embedded] Starting broker service...")
 		}
 		if err := eo.brokerService.Start(eo.ctx); err != nil && eo.ctx.Err() == nil {
-			fmt.Printf("[Gox Embedded] Broker service error: %v\n", err)
+			fmt.Printf("[Cellorg Embedded] Broker service error: %v\n", err)
 		}
 	}()
 
@@ -200,10 +202,21 @@ func NewEmbedded(cfg Config) (*EmbeddedOrchestrator, error) {
 	}
 
 	if cfg.Debug {
-		fmt.Printf("[Gox Embedded] Broker registered with support service: %s%s\n", brokerInfo.Address, brokerInfo.Port)
+		fmt.Printf("[Cellorg Embedded] Broker registered with support service: %s%s\n", brokerInfo.Address, brokerInfo.Port)
 	}
 
 	close(eo.servicesReady)
+
+	// Create broker client for alfa to communicate with agents
+	brokerAddress := "localhost" + cfg.BrokerPort
+	eo.brokerClient = client.NewBrokerClient(brokerAddress, "alfa-orchestrator", cfg.Debug)
+	if err := eo.brokerClient.Connect(); err != nil {
+		return nil, fmt.Errorf("failed to connect broker client: %w", err)
+	}
+
+	if cfg.Debug {
+		fmt.Printf("[Cellorg Embedded] Broker client connected to %s\n", brokerAddress)
+	}
 
 	// Create agent deployer (connects to embedded services)
 	supportAddress := "localhost" + cfg.SupportPort
@@ -225,8 +238,8 @@ func NewEmbedded(cfg Config) (*EmbeddedOrchestrator, error) {
 	// while Alfa uses EventBridge for its own events
 
 	if cfg.Debug {
-		fmt.Println("[Gox Embedded] Initialized with embedded services")
-		fmt.Println("[Gox Embedded] Services: Support(" + cfg.SupportPort + "), Broker(" + cfg.BrokerPort + ")")
+		fmt.Println("[Cellorg Embedded] Initialized with embedded services")
+		fmt.Println("[Cellorg Embedded] Services: Support(" + cfg.SupportPort + "), Broker(" + cfg.BrokerPort + ")")
 	}
 
 	return eo, nil
@@ -274,9 +287,9 @@ func (eo *EmbeddedOrchestrator) StartCell(cellID string, opts CellOptions) error
 	}
 
 	if eo.config.Debug {
-		fmt.Printf("[Gox Embedded] Starting cell %s for project %s (VFS root: %s)\n",
+		fmt.Printf("[Cellorg Embedded] Starting cell %s for project %s (VFS root: %s)\n",
 			cellID, opts.ProjectID, opts.VFSRoot)
-		fmt.Printf("[Gox Embedded] Cell has %d agents\n", len(cellConfig.Agents))
+		fmt.Printf("[Cellorg Embedded] Cell has %d agents\n", len(cellConfig.Agents))
 	}
 
 	// Deploy each agent in the cell
@@ -286,8 +299,8 @@ func (eo *EmbeddedOrchestrator) StartCell(cellID string, opts CellOptions) error
 
 		// Build custom environment for VFS root injection
 		customEnv := make(map[string]string)
-		customEnv["GOX_DATA_ROOT"] = opts.VFSRoot
-		customEnv["GOX_PROJECT_ID"] = opts.ProjectID
+		customEnv["CELLORG_DATA_ROOT"] = opts.VFSRoot
+		customEnv["CELLORG_PROJECT_ID"] = opts.ProjectID
 
 		// Add user-provided environment variables
 		for key, value := range opts.Environment {
@@ -295,7 +308,7 @@ func (eo *EmbeddedOrchestrator) StartCell(cellID string, opts CellOptions) error
 		}
 
 		if eo.config.Debug {
-			fmt.Printf("[Gox Embedded] Deploying agent %s (type: %s) with VFS root: %s\n",
+			fmt.Printf("[Cellorg Embedded] Deploying agent %s (type: %s) with VFS root: %s\n",
 				agent.ID, agent.AgentType, opts.VFSRoot)
 		}
 
@@ -319,7 +332,7 @@ func (eo *EmbeddedOrchestrator) StartCell(cellID string, opts CellOptions) error
 	eo.cells[key] = runningCell
 
 	if eo.config.Debug {
-		fmt.Printf("[Gox Embedded] Cell %s started successfully for project %s\n",
+		fmt.Printf("[Cellorg Embedded] Cell %s started successfully for project %s\n",
 			cellID, opts.ProjectID)
 	}
 
@@ -353,7 +366,7 @@ func (eo *EmbeddedOrchestrator) StopCell(cellID string, projectID string) error 
 		for _, agent := range cellConfig.Agents {
 			if err := eo.agentDeployer.StopAgent(agent.ID); err != nil {
 				if eo.config.Debug {
-					fmt.Printf("[Gox Embedded] Warning: Failed to stop agent %s: %v\n", agent.ID, err)
+					fmt.Printf("[Cellorg Embedded] Warning: Failed to stop agent %s: %v\n", agent.ID, err)
 				}
 			}
 		}
@@ -365,7 +378,7 @@ func (eo *EmbeddedOrchestrator) StopCell(cellID string, projectID string) error 
 	delete(eo.cells, key)
 
 	if eo.config.Debug {
-		fmt.Printf("[Gox Embedded] Stopped cell %s for project %s\n", cellID, projectID)
+		fmt.Printf("[Cellorg Embedded] Stopped cell %s for project %s\n", cellID, projectID)
 	}
 
 	return nil
@@ -391,56 +404,90 @@ func (eo *EmbeddedOrchestrator) StopAll() error {
 	return nil
 }
 
-// Subscribe returns a channel that receives events matching the topic pattern
+// Subscribe returns a channel that receives events from the broker
 func (eo *EmbeddedOrchestrator) Subscribe(topicPattern string) <-chan Event {
+	// Subscribe to broker using broker client
+	if eo.brokerClient != nil {
+		brokerCh, err := eo.brokerClient.Subscribe(topicPattern)
+		if err != nil {
+			// Return empty channel on error
+			emptyCh := make(chan Event)
+			close(emptyCh)
+			return emptyCh
+		}
+
+		// Create Event channel to return to caller
+		eventCh := make(chan Event, 100)
+
+		// Start goroutine to convert BrokerMessages to Events
+		go func() {
+			defer close(eventCh)
+			for brokerMsg := range brokerCh {
+				event := Event{
+					Topic:     brokerMsg.Target,
+					ProjectID: extractProjectIDFromTopic(brokerMsg.Target),
+					Timestamp: time.Now(),
+					Source:    "broker",
+				}
+
+				// Convert payload to map
+				if dataMap, ok := brokerMsg.Payload.(map[string]interface{}); ok {
+					event.Data = dataMap
+				} else {
+					event.Data = map[string]interface{}{"payload": brokerMsg.Payload}
+				}
+
+				select {
+				case eventCh <- event:
+				case <-eo.ctx.Done():
+					return
+				}
+			}
+		}()
+
+		return eventCh
+	}
+
+	// Fallback to EventBridge if broker client not available
 	return eo.eventBridge.Subscribe(topicPattern)
 }
 
 // Unsubscribe closes a subscription
 func (eo *EmbeddedOrchestrator) Unsubscribe(topicPattern string, ch <-chan Event) {
-	eo.eventBridge.Unsubscribe(topicPattern, ch)
+	// Note: Broker client subscriptions are automatically cleaned up when channel is closed
+	// EventBridge subscriptions are handled by EventBridge itself
+	// For now, this is a no-op, but we keep the method for API compatibility
 }
 
-// Publish publishes an event to a topic
+// Publish publishes an event to a topic via the broker
 //
-// Phase 1: Events are forwarded to subscribers only (in-memory)
-// Phase 2: Will publish to actual Gox broker
+// Publishes to the actual cellorg broker so agents can receive messages
 func (eo *EmbeddedOrchestrator) Publish(topic string, data interface{}) error {
-	// Create event
-	event := Event{
-		Topic:     topic,
-		ProjectID: extractProjectIDFromTopic(topic),
-		Timestamp: time.Now(),
-		Source:    "host_application",
-	}
+	// Publish to broker using broker client
+	if eo.brokerClient != nil {
+		// Create BrokerMessage
+		brokerMsg := client.BrokerMessage{
+			ID:        fmt.Sprintf("alfa_%d", time.Now().UnixNano()),
+			Type:      "event",
+			Target:    fmt.Sprintf("pub:%s", topic),
+			Payload:   data,
+			Meta:      make(map[string]interface{}),
+			Timestamp: time.Now(),
+		}
 
-	// Convert data to map
-	if dataMap, ok := data.(map[string]interface{}); ok {
-		event.Data = dataMap
-	} else {
-		event.Data = map[string]interface{}{"payload": data}
-	}
-
-	// Forward to subscribers (simplified - no broker yet)
-	eo.eventBridge.mutex.RLock()
-	defer eo.eventBridge.mutex.RUnlock()
-
-	for pattern, subscribers := range eo.eventBridge.subscribers {
-		if eo.eventBridge.topicMatches(topic, pattern) {
-			for _, subscriber := range subscribers {
-				select {
-				case subscriber <- event:
-				default:
-					// Channel full, drop event
+		// Extract type from data if present
+		if dataMap, ok := data.(map[string]interface{}); ok {
+			if msgType, exists := dataMap["type"]; exists {
+				if msgTypeStr, ok := msgType.(string); ok {
+					brokerMsg.Type = msgTypeStr
 				}
 			}
 		}
+
+		return eo.brokerClient.Publish(topic, brokerMsg)
 	}
 
-	// TODO Phase 2: Publish to actual broker
-	// eo.broker.Publish(topic, data)
-
-	return nil
+	return fmt.Errorf("broker client not initialized")
 }
 
 // PublishAndWait publishes a request and waits for a response
@@ -512,6 +559,11 @@ func (eo *EmbeddedOrchestrator) Close() error {
 	// Stop all cells
 	eo.StopAll()
 
+	// Disconnect broker client
+	if eo.brokerClient != nil {
+		eo.brokerClient.Disconnect()
+	}
+
 	// Close event bridge
 	if eo.eventBridge != nil {
 		eo.eventBridge.Close()
@@ -524,7 +576,7 @@ func (eo *EmbeddedOrchestrator) Close() error {
 	time.Sleep(50 * time.Millisecond)
 
 	if eo.config.Debug {
-		fmt.Println("[Gox Embedded] Shut down")
+		fmt.Println("[Cellorg Embedded] Shut down")
 	}
 
 	return nil

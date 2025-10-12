@@ -1,4 +1,4 @@
-// Package agent provides the base agent framework for all GOX v3 agents.
+// Package agent provides the base agent framework for all cellorg v3 agents.
 // This package implements the common functionality required by all agents,
 // including connection management, configuration handling, lifecycle management,
 // and communication with the support service and broker.
@@ -29,7 +29,7 @@ import (
 	"github.com/tenzoki/agen/cellorg/public/client"
 )
 
-// BaseAgent provides the foundation for all GOX v3 agents.
+// BaseAgent provides the foundation for all cellorg v3 agents.
 // It manages connections to the support service and broker, handles configuration
 // loading, and provides lifecycle management capabilities. All specific agent
 // types should embed this struct to inherit common functionality.
@@ -79,7 +79,7 @@ type AgentConfig struct {
 
 	// VFS configuration
 	ProjectID  string // Project identifier for VFS isolation (optional)
-	DataRoot   string // Root directory for VFS (defaults to /var/lib/gox or GOX_DATA_ROOT env)
+	DataRoot   string // Root directory for VFS (defaults to /var/lib/cellorg or CELLORG_DATA_ROOT env)
 	VFSEnabled bool   // Enable VFS for this agent (default: true)
 	ReadOnly   bool   // Create read-only VFS (for query-only agents)
 }
@@ -111,11 +111,11 @@ func NewBaseAgent(config AgentConfig) (*BaseAgent, error) {
 	// Connect to support service with retry logic (15-minute timeout)
 	supportClient := client.NewSupportClient(config.SupportAddress, config.Debug)
 
-	// Retry connection to GOX support service for up to 15 minutes
+	// Retry connection to cellorg support service for up to 15 minutes
 	const maxRetryDuration = 15 * time.Minute
 	const retryInterval = 10 * time.Second
 
-	log.Printf("Agent %s: Connecting to GOX at %s (will retry for up to 15 minutes)", config.ID, config.SupportAddress)
+	log.Printf("Agent %s: Connecting to cellorg at %s (will retry for up to 15 minutes)", config.ID, config.SupportAddress)
 
 	startTime := time.Now()
 	var lastErr error
@@ -123,15 +123,15 @@ func NewBaseAgent(config AgentConfig) (*BaseAgent, error) {
 	for time.Since(startTime) < maxRetryDuration {
 		if err := supportClient.Connect(); err != nil {
 			lastErr = err
-			log.Printf("Agent %s: Cannot connect to GOX at %s: %v (retrying in %v)",
+			log.Printf("Agent %s: Cannot connect to cellorg at %s: %v (retrying in %v)",
 				config.ID, config.SupportAddress, err, retryInterval)
 
 			// Provide helpful guidance on first connection attempt
 			if time.Since(startTime) < retryInterval*2 {
-				log.Printf("Agent %s: If GOX is running on a different host, use: %s -gox-host=<hostname>",
+				log.Printf("Agent %s: If cellorg is running on a different host, use: %s -cellorg-host=<hostname>",
 					config.ID, os.Args[0])
 				if strings.Contains(config.SupportAddress, "localhost") {
-					log.Printf("Agent %s: WARNING: Trying to connect to 'localhost' - ensure GOX is running locally or specify the correct hostname",
+					log.Printf("Agent %s: WARNING: Trying to connect to 'localhost' - ensure cellorg is running locally or specify the correct hostname",
 						config.ID)
 				}
 			}
@@ -141,22 +141,22 @@ func NewBaseAgent(config AgentConfig) (*BaseAgent, error) {
 		}
 
 		// Connection successful
-		log.Printf("Agent %s: Successfully connected to GOX at %s", config.ID, config.SupportAddress)
+		log.Printf("Agent %s: Successfully connected to cellorg at %s", config.ID, config.SupportAddress)
 		break
 	}
 
 	// Check if we timed out
 	if time.Since(startTime) >= maxRetryDuration {
-		errorMsg := fmt.Sprintf("failed to connect to GOX at %s after %v: %v",
+		errorMsg := fmt.Sprintf("failed to connect to cellorg at %s after %v: %v",
 			config.SupportAddress, maxRetryDuration, lastErr)
 
 		// Add helpful guidance in timeout error
 		if strings.Contains(config.SupportAddress, "localhost") {
-			errorMsg += "\nHINT: If GOX is running on a different host, use: " + os.Args[0] + " -gox-host=<hostname>"
-			errorMsg += "\nHINT: Ensure GOX is running and accessible at " + config.SupportAddress
+			errorMsg += "\nHINT: If cellorg is running on a different host, use: " + os.Args[0] + " -cellorg-host=<hostname>"
+			errorMsg += "\nHINT: Ensure cellorg is running and accessible at " + config.SupportAddress
 		} else {
-			errorMsg += "\nHINT: Verify GOX is running at " + config.SupportAddress
-			errorMsg += "\nHINT: To change the address, use: " + os.Args[0] + " -gox-host=<hostname>"
+			errorMsg += "\nHINT: Verify cellorg is running at " + config.SupportAddress
+			errorMsg += "\nHINT: To change the address, use: " + os.Args[0] + " -cellorg-host=<hostname>"
 		}
 
 		return nil, fmt.Errorf("%s", errorMsg)
@@ -224,11 +224,29 @@ func NewBaseAgent(config AgentConfig) (*BaseAgent, error) {
 		return nil, fmt.Errorf("failed to register agent: %w", err)
 	}
 
-	// Fetch cell-specific configuration
+	// Check environment variables first (set by deployer)
+	ingressFromEnv := os.Getenv("CELLORG_INGRESS")
+	egressFromEnv := os.Getenv("CELLORG_EGRESS")
+
+	if ingressFromEnv != "" {
+		agent.Config["ingress"] = ingressFromEnv
+		if config.Debug {
+			log.Printf("Agent %s loaded ingress from environment: %s", config.ID, ingressFromEnv)
+		}
+	}
+	if egressFromEnv != "" {
+		agent.Config["egress"] = egressFromEnv
+		if config.Debug {
+			log.Printf("Agent %s loaded egress from environment: %s", config.ID, egressFromEnv)
+		}
+	}
+
+	// Fetch cell-specific configuration from support service
+	// (fallback if env vars not set, or to get additional config)
 	cellConfig, err := supportClient.GetAgentCellConfig(config.ID)
 	if err != nil {
-		agent.LogDebug("No cell-specific config available: %v", err)
-		// Not a fatal error - agent can work with default config
+		agent.LogDebug("No cell-specific config available from support service: %v", err)
+		// Not a fatal error - agent can work with env vars or default config
 	} else {
 		// Apply cell configuration to agent
 		if cellConfig.Config != nil {
@@ -237,18 +255,28 @@ func NewBaseAgent(config AgentConfig) (*BaseAgent, error) {
 			}
 		}
 
-		// Store ingress/egress information
-		agent.Config["ingress"] = cellConfig.Ingress
-		agent.Config["egress"] = cellConfig.Egress
-
-		if config.Debug {
-			log.Printf("Agent %s loaded cell config: ingress=%s, egress=%s",
-				config.ID, cellConfig.Ingress, cellConfig.Egress)
+		// Use cell config ingress/egress only if not already set from environment
+		if agent.Config["ingress"] == nil && cellConfig.Ingress != "" {
+			agent.Config["ingress"] = cellConfig.Ingress
+		}
+		if agent.Config["egress"] == nil && cellConfig.Egress != "" {
+			agent.Config["egress"] = cellConfig.Egress
 		}
 
-		// Transition to configured state
-		if err := agent.Lifecycle.SetState(StateConfigured, "cell configuration loaded"); err != nil {
+		if config.Debug {
+			log.Printf("Agent %s loaded cell config from support service", config.ID)
+		}
+	}
+
+	// Transition to configured state if we have ingress/egress
+	if agent.Config["ingress"] != nil && agent.Config["egress"] != nil {
+		if err := agent.Lifecycle.SetState(StateConfigured, "configuration loaded"); err != nil {
 			agent.LogError("Failed to transition to configured state: %v", err)
+		}
+
+		if config.Debug {
+			log.Printf("Agent %s configured: ingress=%s, egress=%s",
+				config.ID, agent.Config["ingress"], agent.Config["egress"])
 		}
 	}
 
@@ -370,7 +398,7 @@ func (a *BaseAgent) Context() context.Context {
 //
 // Resolution priority:
 // 1. Command-line argument: --id=custom-agent-id
-// 2. Environment variable: GOX_AGENT_ID
+// 2. Environment variable: CELLORG_AGENT_ID
 // 3. Auto-generated: agentType-hostname-pid
 //
 // The auto-generated ID ensures uniqueness across multiple agent instances
@@ -392,7 +420,7 @@ func GetAgentID(agentType string) string {
 	}
 
 	// Priority 2: Environment variable
-	if id := os.Getenv("GOX_AGENT_ID"); id != "" {
+	if id := os.Getenv("CELLORG_AGENT_ID"); id != "" {
 		return id
 	}
 
@@ -412,7 +440,7 @@ func GetAgentType(defaultType string) string {
 	}
 
 	// Priority 2: Environment variable
-	if agentType := os.Getenv("GOX_AGENT_TYPE"); agentType != "" {
+	if agentType := os.Getenv("CELLORG_AGENT_TYPE"); agentType != "" {
 		return agentType
 	}
 
@@ -422,7 +450,7 @@ func GetAgentType(defaultType string) string {
 
 // Helper to get configuration from environment
 func GetEnvConfig(key, defaultValue string) string {
-	if value := os.Getenv("GOX_" + key); value != "" {
+	if value := os.Getenv("CELLORG_" + key); value != "" {
 		return value
 	}
 	if value := os.Getenv(key); value != "" {
@@ -433,7 +461,7 @@ func GetEnvConfig(key, defaultValue string) string {
 
 // GetDebugFromEnv checks for debug flag
 func GetDebugFromEnv() bool {
-	if os.Getenv("GOX_DEBUG") == "true" {
+	if os.Getenv("CELLORG_DEBUG") == "true" {
 		return true
 	}
 	for _, arg := range os.Args {
@@ -449,16 +477,16 @@ func (b *BaseAgent) initializeVFS(config AgentConfig) error {
 	// Determine data root
 	dataRoot := config.DataRoot
 	if dataRoot == "" {
-		dataRoot = os.Getenv("GOX_DATA_ROOT")
+		dataRoot = os.Getenv("CELLORG_DATA_ROOT")
 	}
 	if dataRoot == "" {
-		dataRoot = "/var/lib/gox"
+		dataRoot = "/var/lib/cellorg"
 	}
 
 	// Determine project ID
 	projectID := config.ProjectID
 	if projectID == "" {
-		projectID = os.Getenv("GOX_PROJECT_ID")
+		projectID = os.Getenv("CELLORG_PROJECT_ID")
 	}
 	if projectID == "" {
 		projectID = "default" // Default project for backward compatibility

@@ -340,22 +340,28 @@ func main() {
 	// Initialize Cellorg if enabled
 	var cellMgr *cellorchestrator.EmbeddedOrchestrator
 	if cfg.Cellorg.Enabled {
-		fmt.Println("🔧 Initializing cellorg advanced features...")
+		if cfg.Debug {
+			fmt.Println("🔧 Initializing cellorg advanced features...")
+		}
 		// ConfigPath should be absolute path to config directory
 		cellorgConfigPath := filepath.Join(workbenchDir, cfg.Cellorg.ConfigPath)
-		fmt.Printf("   ConfigPath: %s\n", cellorgConfigPath)
-		fmt.Printf("   Looking for: %s/cellorg.yaml\n", cellorgConfigPath)
+		if cfg.Debug {
+			fmt.Printf("   ConfigPath: %s\n", cellorgConfigPath)
+			fmt.Printf("   Looking for: %s/cellorg.yaml\n", cellorgConfigPath)
+		}
 		cellMgr, err = cellorchestrator.NewEmbedded(cellorchestrator.Config{
 			ConfigPath:      cellorgConfigPath,
 			DefaultDataRoot: workbenchDir,
-			Debug:           true,
+			Debug:           cfg.Debug,
 		})
 		if err != nil {
 			fmt.Printf("⚠️  Warning: Failed to initialize cellorg: %v\n", err)
 			fmt.Println("   Advanced features will be disabled.")
 			cellMgr = nil
 		} else {
-			fmt.Println("✅ Cellorg initialized successfully")
+			if cfg.Debug {
+				fmt.Println("✅ Cellorg initialized successfully")
+			}
 			toolDispatcher.SetCellManager(cellMgr)
 		}
 	}

@@ -1,7 +1,7 @@
-// Package main provides the central GOX framework orchestrator that coordinates
+// Package main provides the central cellorg framework orchestrator that coordinates
 // the entire agent-based processing system.
 //
-// GOX is an agent orchestration framework that enables distributed processing
+// Cellorg is an agent orchestration framework that enables distributed processing
 // pipelines through message-passing between specialized agents. The main entry
 // point manages the lifecycle of core services (Support, Broker) and deploys
 // agent instances based on YAML configuration.
@@ -13,7 +13,7 @@
 // - Configuration System: YAML-based pipeline and agent definitions
 //
 // Called by: External processes (CLI, containers, orchestration systems)
-// Calls: All internal GOX framework services and agent operators
+// Calls: All internal cellorg framework services and agent operators
 package main
 
 import (
@@ -34,7 +34,7 @@ import (
 	"github.com/tenzoki/agen/cellorg/internal/support"
 )
 
-// main is the entry point for the GOX orchestrator.
+// main is the entry point for the cellorg orchestrator.
 //
 // Configuration Loading Strategy:
 // 1. Command line argument: Uses specified config file path
@@ -330,16 +330,16 @@ func main() {
 func getDefaultConfig() *config.Config {
 	return &config.Config{
 		AppName: "cellorg-default",
-		Debug:   true,
+		Debug:   false,
 		Support: config.SupportConfig{
 			Port:  ":9000", // Agent registry and health monitoring service
-			Debug: true,
+			Debug: false,
 		},
 		Broker: config.BrokerConfig{
 			Port:     ":9001", // Message routing and pub/sub service
 			Protocol: "tcp",   // TCP transport for reliable message delivery
 			Codec:    "json",  // JSON encoding for human-readable debugging
-			Debug:    true,
+			Debug:    false,
 		},
 		BaseDir:                   []string{"config/"},    // Config directory as base for relative paths
 		Pool:                      []string{"pool.yaml"},  // Agent type definitions

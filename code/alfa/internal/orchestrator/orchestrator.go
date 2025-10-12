@@ -97,6 +97,7 @@ func New(cfg Config) *Orchestrator {
 		contextMgr:      cfg.ContextManager,
 		toolDispatcher:  cfg.ToolDispatcher,
 		vcr:             cfg.VCR,
+// Hardcoded patch for testing
 		targetVFS:       cfg.TargetVFS,
 		targetName:      cfg.TargetName,
 		projectManager:  cfg.ProjectManager,
@@ -216,15 +217,16 @@ func (o *Orchestrator) processRequestWithPEV(ctx context.Context, userInput stri
 		"context": targetContext,
 	}
 
+	// Subscribe to pev-bus for responses BEFORE publishing
+	// (to avoid missing fast responses)
+	responseChan := o.cellManager.Subscribe("pev-bus")
+	defer o.cellManager.Unsubscribe("pev-bus", responseChan)
+
 	// Publish to pev-bus using event bridge (will be routed to agents)
 	fmt.Println("\n📋 Planning your request...")
 	if err := o.cellManager.Publish("pev-bus", userRequest); err != nil {
 		return fmt.Errorf("failed to publish user request: %w", err)
 	}
-
-	// Subscribe to pev-bus for responses
-	responseChan := o.cellManager.Subscribe("pev-bus")
-	defer o.cellManager.Unsubscribe("pev-bus", responseChan)
 
 	// Wait for responses with timeout
 	timeout := time.After(10 * time.Minute)
@@ -326,11 +328,28 @@ func (o *Orchestrator) handlePEVEventMessage(ctx context.Context, event *cellorc
 	case "verification_report":
 		// Verification complete
 		goalAchieved, _ := payload["goal_achieved"].(bool)
+		iteration, _ := payload["iteration"].(float64)
+		currentIter := int(iteration)
+
 		if goalAchieved {
 			fmt.Print("\r✓ Verification passed     \n")
 		} else {
 			issues, _ := payload["issues"].([]interface{})
 			fmt.Printf("\r⚠️  Issues found (%d), re-planning... \n", len(issues))
+			// Print actual issues for debugging
+			for i, issue := range issues {
+				if issueMap, ok := issue.(map[string]interface{}); ok {
+					issueDesc, _ := issueMap["issue"].(string)
+					severity, _ := issueMap["severity"].(string)
+					fmt.Printf("   Issue %d [%s]: %s\n", i+1, severity, issueDesc)
+				}
+			}
+
+			// Check if we've exceeded max iterations
+			if currentIter >= o.maxIterations {
+				fmt.Printf("\n⚠️  Maximum iterations (%d) reached. Stopping.\n", o.maxIterations)
+				return true, true, fmt.Errorf("maximum iterations reached without achieving goal")
+			}
 		}
 		return true, false, nil
 
@@ -462,6 +481,11 @@ func (o *Orchestrator) processRequestNaive(ctx context.Context, userInput string
 
 // getUserInput gets input from text or voice
 func (o *Orchestrator) getUserInput(ctx context.Context) (string, error) {
+	// Show warning if self-modification is enabled
+	if o.allowSelfModify {
+		fmt.Print("⚠️  Self-modification enabled")
+	}
+
 	if o.stt != nil && o.recorder != nil {
 		fmt.Print("\n🎤 Press Enter to speak (or type to use text mode): ")
 		reader := bufio.NewReader(os.Stdin)

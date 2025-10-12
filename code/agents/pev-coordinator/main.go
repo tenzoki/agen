@@ -49,11 +49,22 @@ type PlanRequest struct {
 
 // ExecutionPlan message from Planner
 type ExecutionPlan struct {
-	ID          string                   `json:"id"`
-	RequestID   string                   `json:"request_id"`
-	Type        string                   `json:"type"`
-	Goal        string                   `json:"goal"`
-	Steps       []map[string]interface{} `json:"steps"`
+	ID            string     `json:"id"`
+	RequestID     string     `json:"request_id"`
+	Type          string     `json:"type"`
+	Goal          string     `json:"goal"`
+	TargetContext string     `json:"target_context"`
+	Steps         []PlanStep `json:"steps"`
+}
+
+// PlanStep defines a single step
+type PlanStep struct {
+	ID              string                 `json:"id"`
+	Phase           string                 `json:"phase"`
+	Action          string                 `json:"action"`
+	Params          map[string]interface{} `json:"params"`
+	DependsOn       []string               `json:"depends_on"`
+	SuccessCriteria string                 `json:"success_criteria"`
 }
 
 // VerificationReport message from Verifier
@@ -201,16 +212,28 @@ func (c *PEVCoordinator) handleExecutionResults(msg *client.BrokerMessage, base 
 		return nil, fmt.Errorf("unknown request ID: %s", requestID)
 	}
 
-	base.LogInfo("Received execution results for request %s", requestID)
+	// Debug: check if step_results exists in payload
+	stepResults, hasStepResults := payload["step_results"]
+	if hasStepResults {
+		if results, ok := stepResults.([]interface{}); ok {
+			base.LogInfo("Received execution results for request %s: %d steps", requestID, len(results))
+		} else {
+			base.LogError("step_results is not an array: %T", stepResults)
+		}
+	} else {
+		base.LogError("NO step_results in execution results payload! Keys: %v", getKeys(payload))
+	}
 
 	state.CurrentPhase = "verifying"
 
 	// Send verify request to Verifier
+	// Note: payload is already the ExecutionResults struct as a map
+	// It contains: request_id, plan_id, step_results, all_success, etc.
 	verifyReq := map[string]interface{}{
-		"request_id":       requestID,
-		"plan_id":          state.PlanID,
-		"execution_results": payload,
-		"goal":             state.UserRequest,
+		"request_id":        requestID,
+		"plan_id":           state.PlanID,
+		"execution_results": payload, // Pass the entire payload as execution_results
+		"goal":              state.UserRequest,
 	}
 
 	base.LogInfo("Triggering verification for request %s", requestID)
@@ -347,6 +370,14 @@ func unmarshalPayload(payload interface{}, target interface{}) error {
 		return err
 	}
 	return json.Unmarshal(data, target)
+}
+
+func getKeys(m map[string]interface{}) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	return keys
 }
 
 func main() {
