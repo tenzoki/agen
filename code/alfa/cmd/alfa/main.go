@@ -53,6 +53,9 @@ func main() {
 	// Determine workbench directory (CLI has priority)
 	workbenchDir := determineWorkbenchPath(*workbench)
 
+	// Validate workbench exists (panic if not - cannot run without config)
+	validateWorkbench(workbenchDir)
+
 	// Load or create alfa.yaml configuration (non-fatal, use defaults on error)
 	cfg, err := alfaconfig.LoadOrCreate(workbenchDir)
 	if err != nil {
@@ -413,7 +416,7 @@ func fatal(format string, args ...interface{}) {
 // Priority: CLI arg > default "workbench" in current directory
 func determineWorkbenchPath(cliWorkbench string) string {
 	if cliWorkbench != "" {
-		// Absolute or relative path provided
+		// Absolute or relative path provided via CLI
 		if filepath.IsAbs(cliWorkbench) {
 			return cliWorkbench
 		}
@@ -425,12 +428,66 @@ func determineWorkbenchPath(cliWorkbench string) string {
 		return absPath
 	}
 
-	// Default: workbench in current directory
+	// Determine workbench path based on executable location
+	// Strategy:
+	// 1. If running from bin/ directory: use ../workbench
+	// 2. Otherwise: use ./workbench (relative to current directory)
+
+	// Get executable path
+	exePath, err := os.Executable()
+	if err != nil {
+		// Fallback to os.Args[0] if os.Executable() fails
+		exePath = os.Args[0]
+	}
+
+	// Resolve symlinks
+	exePath, err = filepath.EvalSymlinks(exePath)
+	if err != nil {
+		// If symlink resolution fails, use original path
+		exePath = os.Args[0]
+	}
+
+	// Get directory containing the executable
+	exeDir := filepath.Dir(exePath)
+	exeDirAbs, err := filepath.Abs(exeDir)
+	if err == nil {
+		exeDir = exeDirAbs
+	}
+
+	// Check if executable is in a "bin" directory
+	if filepath.Base(exeDir) == "bin" {
+		// Case 3: ./alfa from inside bin/
+		// Workbench is ../workbench relative to bin
+		workbench := filepath.Join(exeDir, "..", "workbench")
+		workbench, _ = filepath.Abs(workbench)
+		return workbench
+	}
+
+	// Case 1 & 2: Running from project root or with path
+	// Workbench is ./workbench relative to current directory
 	pwd, err := os.Getwd()
 	if err != nil {
 		fatal("Failed to get working directory: %v", err)
 	}
 	return filepath.Join(pwd, "workbench")
+}
+
+// validateWorkbench ensures workbench and config exist, panics if not
+func validateWorkbench(workbenchPath string) {
+	// Check workbench directory exists
+	if _, err := os.Stat(workbenchPath); os.IsNotExist(err) {
+		fatal("Workbench directory not found: %s\n"+
+			"Cannot run alfa without valid workbench configuration.\n"+
+			"Expected structure: <root>/workbench/config/", workbenchPath)
+	}
+
+	// Check config directory exists
+	configPath := filepath.Join(workbenchPath, "config")
+	if _, err := os.Stat(configPath); os.IsNotExist(err) {
+		fatal("Config directory not found: %s\n"+
+			"Cannot run alfa without valid configuration.\n"+
+			"Expected structure: <root>/workbench/config/", configPath)
+	}
 }
 
 // convertToAIConfig converts alfa config to AI config format
