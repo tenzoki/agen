@@ -86,8 +86,9 @@ func main() {
 	}
 	cfg.ApplyCLIOverrides(cliFlags)
 
-	// Update workbench path in case it was changed by CLI
-	workbenchDir = cfg.Workbench.Path
+	// Update config with the determined workbench path (for saving back to alfa.yaml)
+	// Note: workbenchDir was already determined correctly, we just update the config object
+	cfg.Workbench.Path = workbenchDir
 
 	// Try to save the final configuration back to alfa.yaml (non-fatal)
 	configPath := alfaconfig.ResolveConfigPath(workbenchDir)
