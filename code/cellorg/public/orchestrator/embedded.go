@@ -187,6 +187,22 @@ func NewEmbedded(cfg Config) (*EmbeddedOrchestrator, error) {
 
 	// Give services time to start
 	time.Sleep(100 * time.Millisecond)
+
+	// Register broker with support service so agents can discover it
+	brokerInfo := broker.Info{
+		Protocol: "tcp",
+		Address:  "localhost",
+		Port:     cfg.BrokerPort,
+		Codec:    "json",
+	}
+	if err := eo.supportService.SetBrokerAddress(brokerInfo); err != nil {
+		return nil, fmt.Errorf("failed to register broker with support: %w", err)
+	}
+
+	if cfg.Debug {
+		fmt.Printf("[Gox Embedded] Broker registered with support service: %s%s\n", brokerInfo.Address, brokerInfo.Port)
+	}
+
 	close(eo.servicesReady)
 
 	// Create agent deployer (connects to embedded services)
