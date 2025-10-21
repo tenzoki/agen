@@ -25,6 +25,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/tenzoki/agen/atomic/logging"
 	"github.com/tenzoki/agen/atomic/vfs"
 	"github.com/tenzoki/agen/cellorg/public/client"
 )
@@ -115,7 +116,16 @@ func NewBaseAgent(config AgentConfig) (*BaseAgent, error) {
 	const maxRetryDuration = 15 * time.Minute
 	const retryInterval = 10 * time.Second
 
-	log.Printf("Agent %s: Connecting to cellorg at %s (will retry for up to 15 minutes)", config.ID, config.SupportAddress)
+	// Use session logger if available, otherwise fall back to standard log
+	logMsg := func(format string, args ...interface{}) {
+		if sessionLogger := logging.GetGlobalLogger(); sessionLogger != nil {
+			sessionLogger.Debug(format, args...)
+		} else {
+			log.Printf(format, args...)
+		}
+	}
+
+	logMsg("Agent %s: Connecting to cellorg at %s (will retry for up to 15 minutes)", config.ID, config.SupportAddress)
 
 	startTime := time.Now()
 	var lastErr error
@@ -123,15 +133,15 @@ func NewBaseAgent(config AgentConfig) (*BaseAgent, error) {
 	for time.Since(startTime) < maxRetryDuration {
 		if err := supportClient.Connect(); err != nil {
 			lastErr = err
-			log.Printf("Agent %s: Cannot connect to cellorg at %s: %v (retrying in %v)",
+			logMsg("Agent %s: Cannot connect to cellorg at %s: %v (retrying in %v)",
 				config.ID, config.SupportAddress, err, retryInterval)
 
 			// Provide helpful guidance on first connection attempt
 			if time.Since(startTime) < retryInterval*2 {
-				log.Printf("Agent %s: If cellorg is running on a different host, use: %s -cellorg-host=<hostname>",
+				logMsg("Agent %s: If cellorg is running on a different host, use: %s -cellorg-host=<hostname>",
 					config.ID, os.Args[0])
 				if strings.Contains(config.SupportAddress, "localhost") {
-					log.Printf("Agent %s: WARNING: Trying to connect to 'localhost' - ensure cellorg is running locally or specify the correct hostname",
+					logMsg("Agent %s: WARNING: Trying to connect to 'localhost' - ensure cellorg is running locally or specify the correct hostname",
 						config.ID)
 				}
 			}
@@ -141,7 +151,7 @@ func NewBaseAgent(config AgentConfig) (*BaseAgent, error) {
 		}
 
 		// Connection successful
-		log.Printf("Agent %s: Successfully connected to cellorg at %s", config.ID, config.SupportAddress)
+		logMsg("Agent %s: Successfully connected to cellorg at %s", config.ID, config.SupportAddress)
 		break
 	}
 
@@ -231,13 +241,13 @@ func NewBaseAgent(config AgentConfig) (*BaseAgent, error) {
 	if ingressFromEnv != "" {
 		agent.Config["ingress"] = ingressFromEnv
 		if config.Debug {
-			log.Printf("Agent %s loaded ingress from environment: %s", config.ID, ingressFromEnv)
+			agent.LogDebug("loaded ingress from environment: %s", ingressFromEnv)
 		}
 	}
 	if egressFromEnv != "" {
 		agent.Config["egress"] = egressFromEnv
 		if config.Debug {
-			log.Printf("Agent %s loaded egress from environment: %s", config.ID, egressFromEnv)
+			agent.LogDebug("loaded egress from environment: %s", egressFromEnv)
 		}
 	}
 
@@ -264,7 +274,7 @@ func NewBaseAgent(config AgentConfig) (*BaseAgent, error) {
 		}
 
 		if config.Debug {
-			log.Printf("Agent %s loaded cell config from support service", config.ID)
+			agent.LogDebug("loaded cell config from support service")
 		}
 	}
 
@@ -275,13 +285,13 @@ func NewBaseAgent(config AgentConfig) (*BaseAgent, error) {
 		}
 
 		if config.Debug {
-			log.Printf("Agent %s configured: ingress=%s, egress=%s",
-				config.ID, agent.Config["ingress"], agent.Config["egress"])
+			agent.LogDebug("configured: ingress=%s, egress=%s",
+				agent.Config["ingress"], agent.Config["egress"])
 		}
 	}
 
 	if config.Debug {
-		log.Printf("Agent %s initialized successfully", config.ID)
+		agent.LogDebug("initialized successfully")
 	}
 
 	return agent, nil
@@ -305,7 +315,7 @@ func NewBaseAgent(config AgentConfig) (*BaseAgent, error) {
 // Called by: Agent signal handlers, main() cleanup, or orchestrator
 func (a *BaseAgent) Stop() error {
 	if a.Debug {
-		log.Printf("Agent %s shutting down", a.ID)
+		a.LogDebug("shutting down")
 	}
 
 	// Cancel agent context to signal shutdown to all goroutines
@@ -374,17 +384,35 @@ func (a *BaseAgent) GetSupportAddress() string {
 
 // Log helper functions
 func (a *BaseAgent) LogInfo(format string, args ...interface{}) {
-	log.Printf("Agent %s: "+format, append([]interface{}{a.ID}, args...)...)
+	message := fmt.Sprintf(format, args...)
+	// Use session logger if available, otherwise fall back to standard log
+	if sessionLogger := logging.GetGlobalLogger(); sessionLogger != nil {
+		sessionLogger.Debug("Agent %s: %s", a.ID, message)
+	} else {
+		log.Printf("Agent %s: %s", a.ID, message)
+	}
 }
 
 func (a *BaseAgent) LogDebug(format string, args ...interface{}) {
 	if a.Debug {
-		log.Printf("Agent %s [DEBUG]: "+format, append([]interface{}{a.ID}, args...)...)
+		message := fmt.Sprintf(format, args...)
+		// Use session logger if available, otherwise fall back to standard log
+		if sessionLogger := logging.GetGlobalLogger(); sessionLogger != nil {
+			sessionLogger.Debug("Agent %s [DEBUG]: %s", a.ID, message)
+		} else {
+			log.Printf("Agent %s [DEBUG]: %s", a.ID, message)
+		}
 	}
 }
 
 func (a *BaseAgent) LogError(format string, args ...interface{}) {
-	log.Printf("Agent %s [ERROR]: "+format, append([]interface{}{a.ID}, args...)...)
+	message := fmt.Sprintf(format, args...)
+	// Use session logger if available, otherwise fall back to standard log
+	if sessionLogger := logging.GetGlobalLogger(); sessionLogger != nil {
+		sessionLogger.Error("Agent %s: %s", a.ID, message)
+	} else {
+		log.Printf("Agent %s [ERROR]: %s", a.ID, message)
+	}
 }
 
 // Context returns the agent's context for cancellation
@@ -505,8 +533,8 @@ func (b *BaseAgent) initializeVFS(config AgentConfig) error {
 	b.ProjectID = projectID
 
 	if b.Debug {
-		log.Printf("Agent %s: VFS initialized at %s (project: %s, readonly: %v)",
-			b.ID, vfsRoot, projectID, config.ReadOnly)
+		b.LogDebug("VFS initialized at %s (project: %s, readonly: %v)",
+			vfsRoot, projectID, config.ReadOnly)
 	}
 
 	return nil
@@ -617,7 +645,7 @@ func (b *BaseAgent) SetVFSRoot(vfsRoot string, readOnly bool) error {
 	b.VFS = projectVFS
 
 	if b.Debug {
-		log.Printf("Agent %s: VFS root set to %s (readonly: %v)", b.ID, vfsRoot, readOnly)
+		b.LogDebug("VFS root set to %s (readonly: %v)", vfsRoot, readOnly)
 	}
 
 	return nil

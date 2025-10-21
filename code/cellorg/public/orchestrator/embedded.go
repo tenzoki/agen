@@ -3,6 +3,7 @@ package orchestrator
 import (
 	"context"
 	"fmt"
+	"os"
 	"path/filepath"
 	"sync"
 	"time"
@@ -174,7 +175,10 @@ func NewEmbedded(cfg Config) (*EmbeddedOrchestrator, error) {
 			fmt.Println("[Cellorg Embedded] Starting support service...")
 		}
 		if err := eo.supportService.Start(eo.ctx); err != nil && eo.ctx.Err() == nil {
-			fmt.Printf("[Cellorg Embedded] Support service error: %v\n", err)
+			// Only show error in debug mode (address already in use is common when restarting)
+			if cfg.Debug {
+				fmt.Printf("[Cellorg Embedded] Support service error: %v\n", err)
+			}
 		}
 	}()
 
@@ -183,7 +187,10 @@ func NewEmbedded(cfg Config) (*EmbeddedOrchestrator, error) {
 			fmt.Println("[Cellorg Embedded] Starting broker service...")
 		}
 		if err := eo.brokerService.Start(eo.ctx); err != nil && eo.ctx.Err() == nil {
-			fmt.Printf("[Cellorg Embedded] Broker service error: %v\n", err)
+			// Only show error in debug mode (address already in use is common when restarting)
+			if cfg.Debug {
+				fmt.Printf("[Cellorg Embedded] Broker service error: %v\n", err)
+			}
 		}
 	}()
 
@@ -253,6 +260,14 @@ func (eo *EmbeddedOrchestrator) wireEventBridgeToBroker() {
 	// Agents communicate via the embedded broker
 }
 
+// SetAgentLogFile sets the log file for capturing agent process output
+// This redirects all agent stdout/stderr to the specified file for clean CLI
+func (eo *EmbeddedOrchestrator) SetAgentLogFile(logFile *os.File) {
+	if eo.agentDeployer != nil {
+		eo.agentDeployer.SetLogFile(logFile)
+	}
+}
+
 // StartCell starts a cell for a specific project
 //
 // Phase 2: Actually deploys agents with custom VFS root and environment.
@@ -301,6 +316,9 @@ func (eo *EmbeddedOrchestrator) StartCell(cellID string, opts CellOptions) error
 		customEnv := make(map[string]string)
 		customEnv["CELLORG_DATA_ROOT"] = opts.VFSRoot
 		customEnv["CELLORG_PROJECT_ID"] = opts.ProjectID
+
+		// Pass cell's debug flag to agents (overrides orchestrator's debug flag)
+		customEnv["CELLORG_DEBUG"] = fmt.Sprintf("%v", cellConfig.Debug)
 
 		// Add user-provided environment variables
 		for key, value := range opts.Environment {

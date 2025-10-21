@@ -22,6 +22,7 @@ type AgentDeployer struct {
 	processes      map[string]*exec.Cmd              // agent_id -> process
 	processMux     sync.RWMutex
 	debug          bool
+	logFile        *os.File // Optional log file for agent output
 }
 
 // NewAgentDeployer creates a new agent deployer
@@ -32,7 +33,13 @@ func NewAgentDeployer(supportAddress string, frameworkRoot string, debug bool) *
 		poolConfig:     make(map[string]config.AgentTypeConfig),
 		processes:      make(map[string]*exec.Cmd),
 		debug:          debug,
+		logFile:        nil,
 	}
+}
+
+// SetLogFile sets the log file for redirecting agent output
+func (d *AgentDeployer) SetLogFile(logFile *os.File) {
+	d.logFile = logFile
 }
 
 // LoadPool loads agent type definitions from pool configuration
@@ -67,8 +74,10 @@ func (d *AgentDeployer) DeployAgentWithEnv(ctx context.Context, cellAgent config
 		return fmt.Errorf("unknown agent type: %s", cellAgent.AgentType)
 	}
 
-	log.Printf("Deploying agent %s (type: %s, operator: %s)",
-		cellAgent.ID, cellAgent.AgentType, agentTypeConfig.Operator)
+	if d.debug {
+		log.Printf("Deploying agent %s (type: %s, operator: %s)",
+			cellAgent.ID, cellAgent.AgentType, agentTypeConfig.Operator)
+	}
 
 	switch agentTypeConfig.Operator {
 	case "spawn":
@@ -127,10 +136,16 @@ func (d *AgentDeployer) spawnAgentWithEnv(ctx context.Context, cellAgent config.
 	cmd := exec.CommandContext(ctx, binaryPath, args...)
 	cmd.Env = env
 
-	// Redirect output for debugging
-	if d.debug {
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
+	// Redirect agent output to session log file or discard
+	// This keeps CLI clean while preserving debug output in log file
+	if d.logFile != nil {
+		// Write to session log file
+		cmd.Stdout = d.logFile
+		cmd.Stderr = d.logFile
+	} else {
+		// Discard output for clean CLI (but agents can still log to their own files)
+		cmd.Stdout = nil
+		cmd.Stderr = nil
 	}
 
 	// Start the process
@@ -143,7 +158,9 @@ func (d *AgentDeployer) spawnAgentWithEnv(ctx context.Context, cellAgent config.
 	d.processes[cellAgent.ID] = cmd
 	d.processMux.Unlock()
 
-	log.Printf("Spawned agent %s (PID: %d)", cellAgent.ID, cmd.Process.Pid)
+	if d.debug {
+		log.Printf("Spawned agent %s (PID: %d)", cellAgent.ID, cmd.Process.Pid)
+	}
 
 	// Monitor process in background
 	go func() {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -16,11 +17,12 @@ import (
 // PEVExecutor executes plan steps using available tools
 type PEVExecutor struct {
 	agent.DefaultAgentRunner
-	model        string
-	toolsEnabled bool
-	dispatcher   *tools.Dispatcher
-	vfs          *vfs.VFS
-	baseAgent    *agent.BaseAgent
+	model         string
+	toolsEnabled  bool
+	dispatcher    *tools.Dispatcher
+	vfs           *vfs.VFS
+	baseAgent     *agent.BaseAgent
+	executedPlans map[string]bool // Track executed plan IDs for idempotency
 }
 
 // ExecuteTask from Coordinator
@@ -64,6 +66,7 @@ type ExecutionResults struct {
 type StepResult struct {
 	StepID    string                 `json:"step_id"`
 	Action    string                 `json:"action"`
+	Params    map[string]interface{} `json:"params"`
 	Success   bool                   `json:"success"`
 	Output    interface{}            `json:"output"`
 	Error     string                 `json:"error,omitempty"`
@@ -80,6 +83,7 @@ func NewPEVExecutor() *PEVExecutor {
 
 func (e *PEVExecutor) Init(base *agent.BaseAgent) error {
 	e.baseAgent = base
+	e.executedPlans = make(map[string]bool)
 
 	// Load config
 	if model := base.GetConfigString("model", ""); model != "" {
@@ -87,8 +91,12 @@ func (e *PEVExecutor) Init(base *agent.BaseAgent) error {
 	}
 	e.toolsEnabled = base.GetConfigBool("tools_enabled", true)
 
-	// Get VFS root path (defaults to framework code)
-	vfsRoot := base.GetConfigString("vfs_root", ".")
+	// Get VFS root path - prefer CELLORG_DATA_ROOT (set by cellorg for project isolation)
+	vfsRoot := os.Getenv("CELLORG_DATA_ROOT")
+	if vfsRoot == "" {
+		// Fall back to config value (for standalone mode or self-modification)
+		vfsRoot = base.GetConfigString("vfs_root", ".")
+	}
 
 	// Create VFS for the executor (readOnly=false for write operations)
 	var err error
@@ -116,13 +124,47 @@ func (e *PEVExecutor) ProcessMessage(msg *client.BrokerMessage, base *agent.Base
 		return nil, fmt.Errorf("failed to unmarshal execute task: %w", err)
 	}
 
+	// Check if this plan was already executed (idempotency)
+	if e.executedPlans[task.PlanID] {
+		base.LogInfo("Plan %s already executed, ignoring duplicate", task.PlanID)
+		return nil, nil
+	}
+
 	base.LogInfo("Executing plan %s with %d steps", task.PlanID, len(task.Plan.Steps))
+
+	// Debug: Log plan details
+	if len(task.Plan.Steps) == 0 {
+		base.LogError("Plan has ZERO steps! This will result in no execution.")
+	} else {
+		base.LogInfo("Plan steps:")
+		for i, step := range task.Plan.Steps {
+			base.LogInfo("  Step %d: id=%s, action=%s, phase=%s", i+1, step.ID, step.Action, step.Phase)
+		}
+	}
 
 	startTime := time.Now()
 
 	// Execute all steps sequentially (Phase 1: hardcoded simulation)
 	// Phase 4 will implement actual tool execution
 	stepResults := e.executeSteps(task.Plan.Steps, base)
+
+	// Debug: Log results
+	base.LogInfo("executeSteps returned %d results (expected %d)", len(stepResults), len(task.Plan.Steps))
+
+	// Debug: Write to file for inspection
+	if f, err := os.OpenFile("/tmp/pev-logs/executor.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
+		fmt.Fprintf(f, "\n=== Received Task ===\n")
+		fmt.Fprintf(f, "Plan ID: %s\n", task.PlanID)
+		fmt.Fprintf(f, "Steps count in task.Plan: %d\n", len(task.Plan.Steps))
+		for i, step := range task.Plan.Steps {
+			fmt.Fprintf(f, "  Step %d: id=%s, action=%s\n", i+1, step.ID, step.Action)
+		}
+		fmt.Fprintf(f, "Results count: %d\n", len(stepResults))
+		for i, result := range stepResults {
+			fmt.Fprintf(f, "  Result %d: step_id=%s, success=%v\n", i+1, result.StepID, result.Success)
+		}
+		f.Close()
+	}
 
 	// Check if all steps succeeded
 	allSuccess := true
@@ -145,6 +187,9 @@ func (e *PEVExecutor) ProcessMessage(msg *client.BrokerMessage, base *agent.Base
 	base.LogInfo("Execution complete: %d/%d steps succeeded",
 		e.countSuccessful(stepResults), len(stepResults))
 
+	// Mark plan as executed
+	e.executedPlans[task.PlanID] = true
+
 	return e.createMessage("execution_results", results), nil
 }
 
@@ -166,6 +211,7 @@ func (e *PEVExecutor) executeSteps(steps []PlanStep, base *agent.BaseAgent) []St
 			results = append(results, StepResult{
 				StepID:  step.ID,
 				Action:  step.Action,
+				Params:  step.Params,
 				Success: false,
 				Error:   "dependencies not met",
 			})
@@ -245,6 +291,7 @@ func (e *PEVExecutor) executeStep(step PlanStep, base *agent.BaseAgent) StepResu
 	result := StepResult{
 		StepID:   step.ID,
 		Action:   step.Action,
+		Params:   step.Params,
 		Success:  toolResult.Success,
 		Output:   toolResult.Output,
 		Duration: time.Since(startTime),
@@ -267,6 +314,7 @@ func (e *PEVExecutor) simulateStep(step PlanStep, base *agent.BaseAgent, startTi
 	result := StepResult{
 		StepID:   step.ID,
 		Action:   step.Action,
+		Params:   step.Params,
 		Success:  true,
 		Output:   fmt.Sprintf("Simulated output for %s", step.Action),
 		Duration: time.Since(startTime),

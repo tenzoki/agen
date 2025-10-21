@@ -1,5 +1,5 @@
 {
-  "Timestamp": "2025-10-07T07:41:22.287284+02:00",
+  "Timestamp": "2025-10-14T10:40:33.966957+02:00",
   "Sources": [
     {
       "Path": "/Users/kai/Dropbox/qboot/projects/E10-agen/agen/code/agents/adapter/README.md",
@@ -211,7 +211,7 @@
     },
     {
       "Path": "/Users/kai/Dropbox/qboot/projects/E10-agen/agen/workbench/config/pool.yaml",
-      "ModTime": "2025-10-06T21:33:59.405697446+02:00"
+      "ModTime": "2025-10-14T10:39:51.675916284+02:00"
     }
   ],
   "AgentCount": 27,

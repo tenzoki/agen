@@ -9,6 +9,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/tenzoki/agen/atomic/logging"
 	"github.com/tenzoki/agen/cellorg/public/client"
 	"gopkg.in/yaml.v3"
 )
@@ -117,13 +118,22 @@ func (f *AgentFramework) initializeBaseAgent() error {
 		agentID = GetAgentID(agentType)
 	}
 
+	// Use session logger if available, otherwise fall back to standard log
+	logMsg := func(format string, args ...interface{}) {
+		if sessionLogger := logging.GetGlobalLogger(); sessionLogger != nil {
+			sessionLogger.Debug(format, args...)
+		} else {
+			log.Printf(format, args...)
+		}
+	}
+
 	// Log agent ID information with helpful guidance
 	if agentIDPtr != nil && *agentIDPtr != "" {
-		log.Printf("Agent using specified ID: %s", agentID)
+		logMsg("Agent using specified ID: %s", agentID)
 	} else {
-		log.Printf("Agent using auto-generated ID: %s", agentID)
-		log.Printf("HINT: To use a specific cell configuration, specify: %s --agent-id=<cell-agent-id>", os.Args[0])
-		log.Printf("HINT: Available agent IDs can be found in cells.yaml (e.g., file-ingester-demo-001, text-transformer-demo-001)")
+		logMsg("Agent using auto-generated ID: %s", agentID)
+		logMsg("HINT: To use a specific cell configuration, specify: %s --agent-id=<cell-agent-id>", os.Args[0])
+		logMsg("HINT: Available agent IDs can be found in cells.yaml (e.g., file-ingester-demo-001, text-transformer-demo-001)")
 	}
 
 	// Load configuration file using StandardConfigResolver (AGEN convention)
@@ -135,17 +145,17 @@ func (f *AgentFramework) initializeBaseAgent() error {
 
 	configPath, err := resolver.Resolve()
 	if err != nil {
-		log.Printf("Warning: Failed to resolve config path: %v", err)
+		logMsg("Warning: Failed to resolve config path: %v", err)
 	}
 
 	if configPath != "" {
-		log.Printf("Loading configuration from: %s", configPath)
+		logMsg("Loading configuration from: %s", configPath)
 		fileConfig, err = loadConfigFile(configPath)
 		if err != nil {
-			log.Printf("Warning: Failed to load config file %s: %v", configPath, err)
+			logMsg("Warning: Failed to load config file %s: %v", configPath, err)
 			fileConfig = nil
 		} else {
-			log.Printf("Successfully loaded file configuration with %d keys", len(fileConfig))
+			logMsg("Successfully loaded file configuration with %d keys", len(fileConfig))
 		}
 	}
 
@@ -182,7 +192,7 @@ func (f *AgentFramework) initializeBaseAgent() error {
 		baseAgent.Config = mergedConfig
 
 		if debug {
-			log.Printf("Merged file config with support service config (support service wins)")
+			logMsg("Merged file config with support service config (support service wins)")
 		}
 	}
 
@@ -293,12 +303,8 @@ func (f *AgentFramework) processMessage(msg *client.BrokerMessage) error {
 		}
 		f.baseAgent.LogInfo("Processed and forwarded message %s", msg.ID)
 	} else {
-		// For agents like file_writer that handle egress internally,
-		// we still call the egress handler but with the original message
-		// The handler decides whether to process it or not
-		if err := f.handlers.Send(msg); err != nil {
-			return fmt.Errorf("failed to send message: %w", err)
-		}
+		// Agent returned nil - it handles egress internally or doesn't need to send anything
+		// Don't republish the original message to prevent infinite loops
 		f.baseAgent.LogInfo("Processed message %s", msg.ID)
 	}
 

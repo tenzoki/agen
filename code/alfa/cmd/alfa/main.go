@@ -195,8 +195,7 @@ func main() {
 		targetName = selectedProject
 	}
 
-	fmt.Printf("Workbench: %s\n", workbenchVFS.Root())
-	fmt.Printf("Target:    %s (%s)\n\n", targetName, targetVFS.Root())
+	// Startup messages moved to later in sequence after LLM is set up
 
 	// Load AI configuration (either from ai-config.json or use embedded config)
 	var aiCfg *ai.ConfigFile
@@ -247,8 +246,10 @@ func main() {
 		fatal("Cannot continue without a valid AI provider")
 	}
 
-	// Debug: Show which model is being used
+	// Show startup banner with model info
+	fmt.Println("🤖 Alfa AI Coding Assistant starting")
 	fmt.Printf("🤖 Using: %s (%s)\n", llm.Model(), llm.Provider())
+	fmt.Printf("Target:    %s (%s)\n\n", targetName, targetVFS.Root())
 
 	// Setup voice if enabled
 	var stt speech.STT
@@ -497,6 +498,15 @@ func validateWorkbench(workbenchPath string) {
 	}
 }
 
+// normalizeModelName converts model names to consistent format for lookup
+// Examples: "gpt-5 Mini" -> "gpt-5-mini", "GPT-4o" -> "gpt-4o"
+func normalizeModelName(name string) string {
+	// Convert to lowercase and replace spaces with hyphens
+	normalized := strings.ToLower(name)
+	normalized = strings.ReplaceAll(normalized, " ", "-")
+	return normalized
+}
+
 // convertToAIConfig converts alfa config to AI config format
 func convertToAIConfig(cfg *alfaconfig.AlfaConfig) *ai.ConfigFile {
 	aiCfg := &ai.ConfigFile{
@@ -513,14 +523,30 @@ func convertToAIConfig(cfg *alfaconfig.AlfaConfig) *ai.ConfigFile {
 			modelName = cfg.AI.SelectedModel
 		}
 
-		// Get the model's configuration
-		modelCfg, ok := provider.Models[modelName]
+		// Normalize model name for lookup (handles "gpt-5 Mini" vs "gpt-5-mini")
+		normalizedName := normalizeModelName(modelName)
+
+		// Try to find the model configuration
+		// First try normalized name, then try exact match
+		modelCfg, ok := provider.Models[normalizedName]
+		if !ok {
+			// Try exact match as fallback
+			modelCfg, ok = provider.Models[modelName]
+		}
+
 		if !ok {
 			// Fallback to first available model if default not found
+			fmt.Printf("⚠️  Warning: Model '%s' not found in provider '%s'\n", modelName, name)
 			for firstModel, firstCfg := range provider.Models {
 				modelName = firstModel
 				modelCfg = firstCfg
+				fmt.Printf("    Using '%s' instead.\n", firstModel)
 				break
+			}
+		} else {
+			// Update modelName to the normalized version that was found
+			if provider.Models[normalizedName].Description != "" {
+				modelName = normalizedName
 			}
 		}
 

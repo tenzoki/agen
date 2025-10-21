@@ -20,6 +20,7 @@ import (
 	"github.com/tenzoki/agen/alfa/internal/speech"
 	"github.com/tenzoki/agen/alfa/internal/textpatch"
 	"github.com/tenzoki/agen/alfa/internal/tools"
+	"github.com/tenzoki/agen/atomic/logging"
 	"github.com/tenzoki/agen/atomic/vcr"
 	"github.com/tenzoki/agen/atomic/vfs"
 	cellorchestrator "github.com/tenzoki/agen/cellorg/public/orchestrator"
@@ -57,6 +58,8 @@ type Orchestrator struct {
 
 	conversationID string
 	running        bool
+
+	sessionLogger *logging.SessionLogger
 }
 
 // Config holds orchestrator configuration
@@ -92,6 +95,29 @@ func New(cfg Config) *Orchestrator {
 		frameworkRoot = filepath.Dir(cfg.WorkbenchRoot)
 	}
 
+	// Create session logger
+	// Store logs in project-specific logs directory (e.g., workbench/projects/p1/logs)
+	logDir := filepath.Join(cfg.TargetVFS.Root(), "logs")
+	sessionLogger, err := logging.New(logDir, true) // quietMode=true for clean CLI
+	if err != nil {
+		// Non-fatal: fall back to console logging
+		fmt.Fprintf(os.Stderr, "Warning: Failed to create session logger: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Debug output will only be shown in console.\n")
+	} else {
+		// Set as global logger for agents to use
+		logging.SetGlobalLogger(sessionLogger)
+		// Session log path is now shown in main.go startup banner (if desired)
+
+		// If cellorg is available, configure it to redirect agent output to session log
+		if cfg.CellManager != nil {
+			// Get the log file handle for agent output redirection
+			sessionLogFile, err := os.OpenFile(sessionLogger.GetSessionPath(), os.O_APPEND|os.O_WRONLY, 0644)
+			if err == nil {
+				cfg.CellManager.SetAgentLogFile(sessionLogFile)
+			}
+		}
+	}
+
 	return &Orchestrator{
 		llm:             cfg.LLM,
 		contextMgr:      cfg.ContextManager,
@@ -112,23 +138,32 @@ func New(cfg Config) *Orchestrator {
 		maxIterations:   cfg.MaxIterations,
 		allowSelfModify: cfg.AllowSelfModify,
 		conversationID:  generateID(),
+		sessionLogger:   sessionLogger,
 	}
 }
 
 // Run starts the orchestrator's main interaction loop
 func (o *Orchestrator) Run(ctx context.Context) error {
 	o.running = true
-	defer func() { o.running = false }()
+	defer func() {
+		o.running = false
+		// Close session logger on exit
+		if o.sessionLogger != nil {
+			o.sessionLogger.Close()
+		}
+	}()
 
 	systemPrompt := o.buildSystemPrompt()
 
-	fmt.Println("🤖 Alfa AI Coding Assistant")
-	fmt.Println("Type 'exit' or 'quit' to end the session")
-	fmt.Println()
-
+	// Main interaction loop starts (banner already shown in main.go)
 	for o.running {
 		userInput, err := o.getUserInput(ctx)
 		if err != nil {
+			// Handle Ctrl+C gracefully
+			if err == ErrInputCancelled {
+				fmt.Println("\n👋 Goodbye!")
+				return nil
+			}
 			return err
 		}
 
@@ -144,6 +179,11 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 			o.contextMgr.Clear()
 			fmt.Println("✓ Context cleared")
 			continue
+		}
+
+		// Log user input to session file
+		if o.sessionLogger != nil {
+			o.sessionLogger.LogUserInput(userInput)
 		}
 
 		err = o.processRequest(ctx, userInput, systemPrompt)
@@ -185,7 +225,11 @@ func (o *Orchestrator) processRequestWithPEV(ctx context.Context, userInput stri
 	}
 
 	if !pevCellRunning {
-		fmt.Println("🔧 Starting Plan-Execute-Verify cell...")
+		// Log to session file only
+		if o.sessionLogger != nil {
+			o.sessionLogger.LogPEVEvent("Starting PEV cell", "Cell: alfa:plan-execute-verify")
+		}
+
 		// Start the PEV cell
 		opts := cellorchestrator.CellOptions{
 			ProjectID:   o.targetName,
@@ -198,10 +242,19 @@ func (o *Orchestrator) processRequestWithPEV(ctx context.Context, userInput stri
 			opts.Environment["FRAMEWORK_ROOT"] = o.frameworkRoot
 		}
 
+		// Pass session log path to agents via environment
+		if o.sessionLogger != nil {
+			opts.Environment["ALFA_SESSION_LOG"] = o.sessionLogger.GetSessionPath()
+		}
+
 		if err := o.cellManager.StartCell("alfa:plan-execute-verify", opts); err != nil {
 			return fmt.Errorf("failed to start PEV cell: %w", err)
 		}
-		fmt.Println("✓ PEV cell started")
+
+		// Log to session file only
+		if o.sessionLogger != nil {
+			o.sessionLogger.LogPEVEvent("PEV cell started", "Agents initializing...")
+		}
 		// Give agents a moment to initialize
 		time.Sleep(2 * time.Second)
 	}
@@ -217,14 +270,27 @@ func (o *Orchestrator) processRequestWithPEV(ctx context.Context, userInput stri
 		"context": targetContext,
 	}
 
-	// Subscribe to pev-bus for responses BEFORE publishing
-	// (to avoid missing fast responses)
-	responseChan := o.cellManager.Subscribe("pev-bus")
-	defer o.cellManager.Unsubscribe("pev-bus", responseChan)
+	// Subscribe to BOTH alfa-responses (final) and pev-bus (progress) BEFORE publishing
+	responseChan := o.cellManager.Subscribe("alfa-responses")
+	defer o.cellManager.Unsubscribe("alfa-responses", responseChan)
+
+	// Also subscribe to pev-bus to get progress updates
+	progressChan := o.cellManager.Subscribe("pev-bus")
+	defer o.cellManager.Unsubscribe("pev-bus", progressChan)
+
+	// No need to echo - with readline, input is already visible in the terminal
 
 	// Publish to pev-bus using event bridge (will be routed to agents)
-	fmt.Println("\n📋 Planning your request...")
+	// Start animated thinking indicator
+	thinking := NewThinkingIndicator()
+	thinking.Start()
+	defer thinking.Stop()
+
+	if o.sessionLogger != nil {
+		o.sessionLogger.LogPEVEvent("Publishing user request", fmt.Sprintf("Request ID: %s", requestID))
+	}
 	if err := o.cellManager.Publish("pev-bus", userRequest); err != nil {
+		thinking.Stop()
 		return fmt.Errorf("failed to publish user request: %w", err)
 	}
 
@@ -235,7 +301,7 @@ func (o *Orchestrator) processRequestWithPEV(ctx context.Context, userInput stri
 	for {
 		select {
 		case response := <-responseChan:
-			// Handle different message types
+			// Handle final user response
 			handled, done, err := o.handlePEVEventMessage(ctx, &response, requestID, &currentIteration)
 			if err != nil {
 				return err
@@ -247,6 +313,10 @@ func (o *Orchestrator) processRequestWithPEV(ctx context.Context, userInput stri
 				// Ignore messages not for this request
 				continue
 			}
+
+		case progress := <-progressChan:
+			// Handle progress updates (update thinking indicator)
+			o.handlePEVProgressMessage(&progress, requestID, thinking)
 
 		case <-timeout:
 			return fmt.Errorf("PEV request timeout (10 minutes)")
@@ -289,73 +359,11 @@ func (o *Orchestrator) handlePEVEventMessage(ctx context.Context, event *cellorc
 	msgType, _ := payload["type"].(string)
 
 	// Handle different message types
+	// Note: Alfa now only receives user_response messages on alfa-responses topic
+	// All other internal PEV messages stay on pev-bus
 	switch msgType {
-	case "plan_request":
-		// Planner is working
-		iteration, _ := payload["iteration"].(int)
-		if iteration > *currentIteration {
-			*currentIteration = iteration
-		}
-		fmt.Printf("\r🔄 Planning... (iteration %d/%d)    ", *currentIteration, o.maxIterations)
-		return true, false, nil
-
-	case "execution_plan":
-		// Plan created, executor starting
-		plan, _ := payload["plan"].(map[string]interface{})
-		if plan != nil {
-			steps, _ := plan["steps"].([]interface{})
-			fmt.Printf("\r✓ Plan ready (%d steps)              \n", len(steps))
-		}
-		fmt.Print("⚙️  Executing plan...    ")
-		return true, false, nil
-
-	case "execute_task":
-		// Executor is working
-		fmt.Print("\r⚙️  Executing plan...    ")
-		return true, false, nil
-
-	case "execution_results":
-		// Execution complete, verifying
-		fmt.Print("\r✓ Execution complete      \n")
-		fmt.Print("🔍 Verifying results...   ")
-		return true, false, nil
-
-	case "verify_request":
-		// Verifier is working
-		fmt.Print("\r🔍 Verifying results...   ")
-		return true, false, nil
-
-	case "verification_report":
-		// Verification complete
-		goalAchieved, _ := payload["goal_achieved"].(bool)
-		iteration, _ := payload["iteration"].(float64)
-		currentIter := int(iteration)
-
-		if goalAchieved {
-			fmt.Print("\r✓ Verification passed     \n")
-		} else {
-			issues, _ := payload["issues"].([]interface{})
-			fmt.Printf("\r⚠️  Issues found (%d), re-planning... \n", len(issues))
-			// Print actual issues for debugging
-			for i, issue := range issues {
-				if issueMap, ok := issue.(map[string]interface{}); ok {
-					issueDesc, _ := issueMap["issue"].(string)
-					severity, _ := issueMap["severity"].(string)
-					fmt.Printf("   Issue %d [%s]: %s\n", i+1, severity, issueDesc)
-				}
-			}
-
-			// Check if we've exceeded max iterations
-			if currentIter >= o.maxIterations {
-				fmt.Printf("\n⚠️  Maximum iterations (%d) reached. Stopping.\n", o.maxIterations)
-				return true, true, fmt.Errorf("maximum iterations reached without achieving goal")
-			}
-		}
-		return true, false, nil
-
 	case "user_response":
-		// Final response from coordinator
-		fmt.Print("\r                          \r") // Clear progress line
+		// Final response from coordinator (thinking indicator will be stopped by defer)
 		return o.handlePEVResponse(ctx, payload)
 
 	default:
@@ -374,9 +382,19 @@ func (o *Orchestrator) handlePEVResponse(ctx context.Context, payload map[string
 
 	if status == "complete" && goalAchieved {
 		// Success!
-		fmt.Printf("\n✅ Request completed successfully after %d iteration(s)\n", iterations)
+		if o.sessionLogger != nil {
+			o.sessionLogger.LogPEVEvent("Request completed successfully",
+				fmt.Sprintf("Iterations: %d, Goal achieved: %v", iterations, goalAchieved))
+			if message != "" {
+				o.sessionLogger.LogAIResponse(message)
+			}
+		}
+
+		// Show result to user
 		if message != "" {
-			o.respond(ctx, message)
+			fmt.Printf("\n✅ %s\n", message)
+		} else {
+			fmt.Println("\n✅ Request completed successfully")
 		}
 
 		// Record success in context
@@ -387,8 +405,15 @@ func (o *Orchestrator) handlePEVResponse(ctx context.Context, payload map[string
 	if status == "failed" {
 		// Failed after max iterations
 		fmt.Printf("\n❌ Request failed after %d iteration(s)\n", iterations)
+		if o.sessionLogger != nil {
+			o.sessionLogger.LogPEVEvent("Request failed",
+				fmt.Sprintf("Iterations: %d, Max iterations reached", iterations))
+		}
 		if message != "" {
 			fmt.Println(message)
+			if o.sessionLogger != nil {
+				o.sessionLogger.Info("Failure message: %s", message)
+			}
 		}
 
 		// Show issues if present
@@ -397,6 +422,9 @@ func (o *Orchestrator) handlePEVResponse(ctx context.Context, payload map[string
 			for _, issue := range issues {
 				if issueStr, ok := issue.(string); ok {
 					fmt.Printf("  • %s\n", issueStr)
+					if o.sessionLogger != nil {
+						o.sessionLogger.Info("Issue: %s", issueStr)
+					}
 				}
 			}
 		}
@@ -409,6 +437,9 @@ func (o *Orchestrator) handlePEVResponse(ctx context.Context, payload map[string
 					desc, _ := actionMap["description"].(string)
 					priority, _ := actionMap["priority"].(string)
 					fmt.Printf("  • [%s] %s\n", priority, desc)
+					if o.sessionLogger != nil {
+						o.sessionLogger.Info("Next action [%s]: %s", priority, desc)
+					}
 				}
 			}
 		}
@@ -422,9 +453,125 @@ func (o *Orchestrator) handlePEVResponse(ctx context.Context, payload map[string
 	return true, true, fmt.Errorf("unexpected PEV status: %s", status)
 }
 
+// handlePEVProgressMessage processes progress updates from the PEV pipeline
+// Updates the thinking indicator with current phase and action details
+func (o *Orchestrator) handlePEVProgressMessage(event *cellorchestrator.Event, requestID string, thinking *ThinkingIndicator) {
+	payload := event.Data
+	if payload == nil {
+		return
+	}
+
+	// Check if this message is for our request
+	msgRequestID, ok := payload["request_id"].(string)
+	if !ok || msgRequestID != requestID {
+		return // Not for us
+	}
+
+	// Get message type
+	msgType, _ := payload["type"].(string)
+
+	// Parse phase and detail based on message type
+	var phase, detail string
+
+	switch msgType {
+	case "planning_started":
+		phase = "Planning"
+		if content, ok := payload["content"].(string); ok {
+			detail = content
+		} else {
+			detail = "Analyzing request..."
+		}
+
+	case "plan_ready":
+		phase = "Planning"
+		detail = "Plan complete"
+
+	case "execution_started":
+		phase = "Executing"
+		if action, ok := payload["action"].(string); ok {
+			detail = action
+		} else {
+			detail = "Running actions..."
+		}
+
+	case "action_started":
+		phase = "Executing"
+		if actionType, ok := payload["action_type"].(string); ok {
+			// Make action type more readable
+			switch actionType {
+			case "read_file":
+				if file, ok := payload["file"].(string); ok {
+					detail = fmt.Sprintf("Reading %s", file)
+				} else {
+					detail = "Reading file..."
+				}
+			case "write_file":
+				if file, ok := payload["file"].(string); ok {
+					detail = fmt.Sprintf("Writing %s", file)
+				} else {
+					detail = "Writing file..."
+				}
+			case "patch":
+				if file, ok := payload["file"].(string); ok {
+					detail = fmt.Sprintf("Patching %s", file)
+				} else {
+					detail = "Patching file..."
+				}
+			case "run_command":
+				if cmd, ok := payload["command"].(string); ok {
+					// Truncate long commands
+					if len(cmd) > 40 {
+						cmd = cmd[:40] + "..."
+					}
+					detail = fmt.Sprintf("Running: %s", cmd)
+				} else {
+					detail = "Running command..."
+				}
+			case "run_tests":
+				detail = "Running tests..."
+			default:
+				detail = fmt.Sprintf("%s...", actionType)
+			}
+		} else {
+			detail = "Executing action..."
+		}
+
+	case "action_completed":
+		// Don't update on completion, wait for next action
+		return
+
+	case "verification_started":
+		phase = "Verifying"
+		detail = "Checking results..."
+
+	case "verification_complete":
+		phase = "Verifying"
+		if success, ok := payload["success"].(bool); ok {
+			if success {
+				detail = "Verification passed"
+			} else {
+				detail = "Verification failed, retrying..."
+			}
+		} else {
+			detail = "Complete"
+		}
+
+	default:
+		// Unknown message type, don't update
+		return
+	}
+
+	// Update the thinking indicator
+	if phase != "" {
+		thinking.UpdateProgress(phase, detail)
+	}
+}
+
 // processRequestNaive is the original naive loop implementation (fallback)
 func (o *Orchestrator) processRequestNaive(ctx context.Context, userInput string, systemPrompt string) error {
 	o.contextMgr.AddUserMessage(userInput)
+
+	// No need to echo - with readline, input is already visible in the terminal
 
 	iteration := 0
 	for iteration < o.maxIterations {
@@ -487,10 +634,11 @@ func (o *Orchestrator) getUserInput(ctx context.Context) (string, error) {
 	}
 
 	if o.stt != nil && o.recorder != nil {
+		// For voice mode, use simple bufio (just check for Enter vs text)
 		fmt.Print("\n🎤 Press Enter to speak (or type to use text mode): ")
 		reader := bufio.NewReader(os.Stdin)
-		input, _ := reader.ReadString('\n')
-		input = strings.TrimSpace(input)
+		line, _ := reader.ReadString('\n')
+		input := strings.TrimSpace(line)
 
 		if input != "" {
 			return input, nil
@@ -527,10 +675,10 @@ func (o *Orchestrator) getUserInput(ctx context.Context) (string, error) {
 }
 
 func (o *Orchestrator) getTextInput() (string, error) {
-	fmt.Print("\n> ")
-	reader := bufio.NewReader(os.Stdin)
-	input, err := reader.ReadString('\n')
+	// Use readline for natural terminal input (supports multiline, history, etc.)
+	input, err := getMultiLineInput("> ")
 	if err != nil {
+		// Propagate all errors including ErrInputCancelled (Ctrl+C should exit app)
 		return "", err
 	}
 	return strings.TrimSpace(input), nil
@@ -816,8 +964,8 @@ func (o *Orchestrator) confirmAction(action Action) bool {
 	fmt.Print("Proceed? [Y/n]: ")
 
 	reader := bufio.NewReader(os.Stdin)
-	response, _ := reader.ReadString('\n')
-	response = strings.TrimSpace(strings.ToLower(response))
+	input, _ := reader.ReadString('\n')
+	response := strings.TrimSpace(strings.ToLower(input))
 
 	return response == "" || response == "y" || response == "yes"
 }

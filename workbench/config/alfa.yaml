@@ -1,13 +1,14 @@
+debug: false
 workbench:
     path: /Users/kai/Dropbox/qboot/projects/E10-agen/agen/workbench
     project: ""
 ai:
     provider: openai
-    selected_model: gpt-5
+    selected_model: gpt-5-mini
     config_file: ""
     providers:
         openai:
-            default_model: gpt-5
+            default_model: gpt-5-mini
             models:
                 gpt-4o:
                     description: 'GPT-4o: Previous generation multimodal flagship'
@@ -73,7 +74,7 @@ ai:
                     temperature: 0
                     timeout: 2m0s
 voice:
-    input_enabled: true
+    input_enabled: false
     output_enabled: false
     headless: false
 execution:
@@ -89,4 +90,4 @@ output:
     capture_enabled: true
     max_size_kb: 10
 self_modify:
-    allowed: true
+    allowed: false

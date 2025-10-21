@@ -2,7 +2,7 @@
 # Main orchestrator configuration for AGEN
 
 app_name: "cellorg-app"
-debug: true
+debug: false
 
 # Self-modification settings (AGEN can modify its own code)
 self_modification:
@@ -13,14 +13,14 @@ self_modification:
 # Support service (agent registry and health monitoring)
 support:
   port: ":9000"
-  debug: true
+  debug: false
 
 # Broker service (message routing and pub/sub)
 broker:
   port: ":9001"
   protocol: "tcp" # tcp | uds
   codec: "json"
-  debug: true
+  debug: false
 
 # Base directory for relative paths (relative to ConfigPath)
 basedir:

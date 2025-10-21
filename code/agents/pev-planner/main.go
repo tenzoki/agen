@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -16,10 +17,12 @@ import (
 // PEVPlanner generates execution plans from user requests
 type PEVPlanner struct {
 	agent.DefaultAgentRunner
-	model       string
-	temperature float64
-	llm         ai.LLM
-	baseAgent   *agent.BaseAgent
+	model            string
+	temperature      float64
+	llm              ai.LLM
+	baseAgent        *agent.BaseAgent
+	logIntermediates bool
+	logPath          string
 }
 
 // PlanRequest from Coordinator
@@ -68,8 +71,20 @@ func (p *PEVPlanner) Init(base *agent.BaseAgent) error {
 	if model := base.GetConfigString("model", ""); model != "" {
 		p.model = model
 	}
+	p.logIntermediates = base.GetConfigBool("log_intermediates", false)
+	p.logPath = base.GetConfigString("log_path", "tmp")
+
+	// Resolve log path relative to CELLORG_DATA_ROOT if available
+	if dataRoot := os.Getenv("CELLORG_DATA_ROOT"); dataRoot != "" {
+		p.logPath = filepath.Join(dataRoot, p.logPath)
+	}
 
 	base.LogInfo("PEV Planner initializing with model: %s", p.model)
+	if p.logIntermediates {
+		base.LogInfo("LLM intermediates logging enabled: %s", p.logPath)
+		// Create log directory
+		os.MkdirAll(p.logPath, 0755)
+	}
 
 	// Initialize LLM client
 	var err error
@@ -143,6 +158,30 @@ func (p *PEVPlanner) ProcessMessage(msg *client.BrokerMessage, base *agent.BaseA
 
 	base.LogInfo("Generated plan with %d steps", len(plan.Steps))
 
+	// Debug: Log plan details before sending
+	if len(plan.Steps) == 0 {
+		base.LogError("CRITICAL: Planner generated plan with ZERO steps!")
+	} else {
+		base.LogInfo("\n=== Plan Generated ===")
+		base.LogInfo("Plan ID: %s", plan.ID)
+		base.LogInfo("Request ID: %s", plan.RequestID)
+		base.LogInfo("Goal: %s", plan.Goal)
+		base.LogInfo("Steps: %d steps", len(plan.Steps))
+		for i, step := range plan.Steps {
+			base.LogInfo("  %d. [%s] %s (phase: %s)", i+1, step.ID, step.Action, step.Phase)
+		}
+		base.LogInfo("======================\n")
+	}
+
+	// Debug: Write to file for inspection
+	if f, err := os.OpenFile("/tmp/pev-logs/planner.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
+		fmt.Fprintf(f, "\n=== Plan Generated ===\n")
+		fmt.Fprintf(f, "Steps count: %d\n", len(plan.Steps))
+		planJSON, _ := json.MarshalIndent(plan, "", "  ")
+		fmt.Fprintf(f, "Plan JSON:\n%s\n", string(planJSON))
+		f.Close()
+	}
+
 	return p.createMessage("execution_plan", plan), nil
 }
 
@@ -174,6 +213,23 @@ func (p *PEVPlanner) createAIPlan(req PlanRequest, base *agent.BaseAgent) (Execu
 
 	base.LogInfo("LLM response received (%d tokens, %dms)",
 		response.Usage.TotalTokens, response.ResponseTime.Milliseconds())
+
+	// Log intermediates if enabled
+	if p.logIntermediates {
+		timestamp := time.Now().Format("20060102-150405")
+		iteration := req.Iteration
+
+		// Write prompt
+		promptFile := fmt.Sprintf("%s/%s-planner-iter%d-prompt.txt", p.logPath, timestamp, iteration)
+		promptContent := fmt.Sprintf("=== SYSTEM ===\n%s\n\n=== USER ===\n%s\n", systemPrompt, userPrompt)
+		os.WriteFile(promptFile, []byte(promptContent), 0644)
+
+		// Write completion
+		completionFile := fmt.Sprintf("%s/%s-planner-iter%d-completion.txt", p.logPath, timestamp, iteration)
+		os.WriteFile(completionFile, []byte(response.Content), 0644)
+
+		base.LogDebug("Wrote LLM intermediates to %s", p.logPath)
+	}
 
 	// Parse JSON response
 	plan, err := p.parsePlanFromResponse(response.Content, req)
@@ -320,8 +376,13 @@ func (p *PEVPlanner) parsePlanFromResponse(content string, req PlanRequest) (Exe
 
 // storePlan stores the generated plan for future reference and learning
 func (p *PEVPlanner) storePlan(plan ExecutionPlan, base *agent.BaseAgent) error {
-	// Get data path from config
-	dataPath := base.GetConfigString("data_path", "./data/planner")
+	// Get data path from config (relative to VFS root)
+	dataPath := base.GetConfigString("data_path", "data/planner")
+
+	// Resolve relative to CELLORG_DATA_ROOT if available
+	if dataRoot := os.Getenv("CELLORG_DATA_ROOT"); dataRoot != "" {
+		dataPath = filepath.Join(dataRoot, dataPath)
+	}
 
 	// Create directory if it doesn't exist
 	if err := os.MkdirAll(dataPath, 0755); err != nil {

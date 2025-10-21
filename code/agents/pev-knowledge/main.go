@@ -3,6 +3,8 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/tenzoki/agen/cellorg/public/agent"
@@ -58,8 +60,13 @@ func NewPEVKnowledgeStore() *PEVKnowledgeStore {
 func (k *PEVKnowledgeStore) Init(base *agent.BaseAgent) error {
 	k.baseAgent = base
 
-	// Get data path from config
-	k.dataPath = base.GetConfigString("data_path", "./data/pev-knowledge")
+	// Get data path from config (relative to VFS root)
+	k.dataPath = base.GetConfigString("data_path", "data/pev-knowledge")
+
+	// Resolve relative to CELLORG_DATA_ROOT if available
+	if dataRoot := os.Getenv("CELLORG_DATA_ROOT"); dataRoot != "" {
+		k.dataPath = filepath.Join(dataRoot, k.dataPath)
+	}
 
 	// Initialize OmniStore
 	store, err := omnistore.NewOmniStoreWithDefaults(k.dataPath)
